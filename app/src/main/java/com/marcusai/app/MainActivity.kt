@@ -47,7 +47,7 @@ private val Panel = Color(0xFF111827)
 private val White = Color(0xFFF4F7FF)
 private val Muted = Color(0xFF8995A8)
 
-data class ChatMessage(
+private data class ChatMessage(
     val role: String,
     val content: String
 )
@@ -62,26 +62,44 @@ class MainActivity : ComponentActivity() {
         )
 
         setContent {
-            MarcusScreen(prefs)
+            MaterialTheme(
+                colorScheme = darkColorScheme(
+                    primary = ElectricBlue,
+                    background = Obsidian,
+                    surface = Panel,
+                    onBackground = White,
+                    onSurface = White
+                )
+            ) {
+                MarcusScreen(prefs)
+            }
         }
     }
 }
 
 @Composable
-fun MarcusScreen(prefs: android.content.SharedPreferences) {
+private fun MarcusScreen(
+    prefs: android.content.SharedPreferences
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
 
     var userId by remember {
-        mutableStateOf(prefs.getString("marcus_user_id", "") ?: "")
+        mutableStateOf(
+            prefs.getString("marcus_user_id", "") ?: ""
+        )
     }
+
     var idInput by remember { mutableStateOf("") }
     var messageInput by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("Ready") }
     var busy by remember { mutableStateOf(false) }
     var voiceMode by remember { mutableStateOf(true) }
 
-    val messages = remember { mutableStateListOf<ChatMessage>() }
+    val messages = remember {
+        mutableStateListOf<ChatMessage>()
+    }
+
     val listState = rememberLazyListState()
 
     val tts = remember {
@@ -92,7 +110,7 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
         }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(tts) {
         onDispose {
             tts.stop()
             tts.shutdown()
@@ -101,11 +119,16 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
 
     LaunchedEffect(Unit) {
         try {
-            val saved = prefs.getString("chat_history", "[]") ?: "[]"
+            val saved = prefs.getString(
+                "chat_history",
+                "[]"
+            ) ?: "[]"
+
             val array = JSONArray(saved)
 
             for (i in 0 until array.length()) {
                 val item = array.getJSONObject(i)
+
                 messages.add(
                     ChatMessage(
                         item.optString("role"),
@@ -120,14 +143,16 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.lastIndex)
+            listState.animateScrollToItem(
+                messages.lastIndex
+            )
         }
     }
 
     fun saveHistory() {
         val array = JSONArray()
 
-        messages.takeLast(30).forEach {
+        messages.takeLast(40).forEach {
             array.put(
                 JSONObject()
                     .put("role", it.role)
@@ -143,10 +168,18 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
     fun sendMessage() {
         val text = messageInput.trim()
 
-        if (text.isEmpty() || busy || userId.isBlank()) return
+        if (
+            text.isEmpty() ||
+            busy ||
+            userId.isBlank()
+        ) return
 
         messageInput = ""
-        messages.add(ChatMessage("user", text))
+
+        messages.add(
+            ChatMessage("user", text)
+        )
+
         saveHistory()
 
         busy = true
@@ -154,19 +187,30 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
 
         scope.launch {
             try {
-                val history = messages.takeLast(12)
-                    .map { it.role to it.content }
+                val history = messages
+                    .takeLast(12)
+                    .map {
+                        it.role to it.content
+                    }
 
                 val reply = withContext(Dispatchers.IO) {
-                    sendToWorker(userId, text, history)
+                    sendToWorker(
+                        userId,
+                        text,
+                        history
+                    )
                 }
 
-                messages.add(ChatMessage("assistant", reply))
+                messages.add(
+                    ChatMessage("assistant", reply)
+                )
+
                 saveHistory()
                 status = "Marcus is ready"
 
                 if (voiceMode) {
                     tts.language = Locale.getDefault()
+
                     tts.speak(
                         reply,
                         TextToSpeech.QUEUE_FLUSH,
@@ -174,15 +218,18 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
                         "marcus_reply"
                     )
                 }
-            } catch (e: Exception) {
+
+            } catch (_: Exception) {
                 messages.add(
                     ChatMessage(
                         "assistant",
-                        "I couldn't connect. Please check your internet and try again."
+                        "I couldn't connect. Check your internet and try again."
                     )
                 )
+
                 saveHistory()
                 status = "Connection problem"
+
             } finally {
                 busy = false
             }
@@ -193,7 +240,7 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
         if (busy || userId.isBlank()) return
 
         busy = true
-        status = "Loading memory..."
+        status = "Loading V10 memory..."
 
         scope.launch {
             try {
@@ -208,22 +255,35 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
                 val memory = result.opt("memory")
 
                 val display = when {
-                    memory == null -> result.optString(
-                        "reply",
-                        result.toString()
-                    )
-                    memory is JSONObject -> memory.toString(2)
+                    memory == null ->
+                        result.optString(
+                            "reply",
+                            result.toString()
+                        )
+
+                    memory is JSONObject ->
+                        memory.toString(2)
+
+                    memory is JSONArray ->
+                        memory.toString(2)
+
                     else -> memory.toString()
                 }
 
                 messages.add(
-                    ChatMessage("assistant", "V10 MEMORY:\n$display")
+                    ChatMessage(
+                        "assistant",
+                        "V10 MEMORY\n$display"
+                    )
                 )
 
                 saveHistory()
                 status = "Memory loaded"
-            } catch (e: Exception) {
+                voiceMode = false
+
+            } catch (_: Exception) {
                 status = "Memory could not load"
+
             } finally {
                 busy = false
             }
@@ -234,7 +294,11 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
         rememberLauncherForActivityResult(
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
-            if (result.resultCode == android.app.Activity.RESULT_OK) {
+
+            if (
+                result.resultCode ==
+                android.app.Activity.RESULT_OK
+            ) {
                 val spoken = result.data
                     ?.getStringArrayListExtra(
                         RecognizerIntent.EXTRA_RESULTS
@@ -252,6 +316,7 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
         rememberLauncherForActivityResult(
             ActivityResultContracts.RequestPermission()
         ) { granted ->
+
             if (granted) {
                 val intent = Intent(
                     RecognizerIntent.ACTION_RECOGNIZE_SPEECH
@@ -260,10 +325,12 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
                         RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                         RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
                     )
+
                     putExtra(
                         RecognizerIntent.EXTRA_LANGUAGE,
                         Locale.getDefault()
                     )
+
                     putExtra(
                         RecognizerIntent.EXTRA_PROMPT,
                         "Speak to Marcus"
@@ -275,23 +342,32 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
                 } catch (_: Exception) {
                     status = "Speech service unavailable"
                 }
+
             } else {
-                status = "Microphone permission is needed"
+                status = "Microphone permission is required"
             }
         }
 
-    MaterialTheme {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Obsidian
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Obsidian)
-                .padding(horizontal = 18.dp, vertical = 16.dp)
+                .padding(
+                    horizontal = 18.dp,
+                    vertical = 16.dp
+                )
         ) {
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
                     Text(
                         "MARCUS",
                         color = White,
@@ -307,20 +383,23 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
                     )
                 }
 
-                Box(
+                Text(
+                    "V11",
+                    color = ElectricBlue,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier
-                        .background(Panel, CircleShape)
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        "V11",
-                        color = ElectricBlue,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                        .background(
+                            Panel,
+                            RoundedCornerShape(20.dp)
+                        )
+                        .padding(
+                            horizontal = 14.dp,
+                            vertical = 8.dp
+                        )
+                )
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
 
             Text(
                 status,
@@ -328,66 +407,91 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
                 fontSize = 12.sp
             )
 
+            Spacer(Modifier.height(12.dp))
+
             if (userId.isBlank()) {
-                Spacer(Modifier.height(30.dp))
 
-                Text(
-                    "Connect your V10 account",
-                    color = White,
-                    fontSize = 20.sp
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                BasicTextField(
-                    value = idInput,
-                    onValueChange = { idInput = it },
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Panel, RoundedCornerShape(14.dp))
-                        .padding(16.dp),
-                    textStyle = TextStyle(
-                        color = White,
-                        fontSize = 14.sp
-                    ),
-                    decorationBox = { inner ->
-                        if (idInput.isEmpty()) {
-                            Text(
-                                "Paste your V10 account ID",
-                                color = Muted
-                            )
-                        }
-                        inner()
-                    }
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                Button(
-                    onClick = {
-                        val id = idInput.trim()
-
-                        if (id.isNotEmpty()) {
-                            prefs.edit()
-                                .putString("marcus_user_id", id)
-                                .apply()
-
-                            userId = id
-                            status = "Account connected"
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ElectricBlue
-                    )
+                        .weight(1f),
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Text("Connect Marcus")
+                    Text(
+                        "Connect your V10 account",
+                        color = White,
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    BasicTextField(
+                        value = idInput,
+                        onValueChange = {
+                            idInput = it
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Panel,
+                                RoundedCornerShape(14.dp)
+                            )
+                            .padding(16.dp),
+                        textStyle = TextStyle(
+                            color = White,
+                            fontSize = 14.sp
+                        ),
+                        decorationBox = { inner ->
+                            if (idInput.isEmpty()) {
+                                Text(
+                                    "Paste your V10 account ID",
+                                    color = Muted
+                                )
+                            }
+                            inner()
+                        }
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            val id = idInput.trim()
+
+                            if (id.isNotEmpty()) {
+                                prefs.edit()
+                                    .putString(
+                                        "marcus_user_id",
+                                        id
+                                    )
+                                    .apply()
+
+                                userId = id
+                                status = "V10 account connected"
+                            }
+                        },
+                        enabled = idInput.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ElectricBlue
+                        )
+                    ) {
+                        Text("Connect Marcus")
+                    }
                 }
+
             } else {
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Panel, RoundedCornerShape(18.dp))
-                        .padding(5.dp)
+                        .background(
+                            Panel,
+                            RoundedCornerShape(16.dp)
+                        )
+                        .padding(5.dp),
+                    horizontalArrangement =
+                        Arrangement.spacedBy(5.dp)
                 ) {
                     ModeButton(
                         label = "VOICE",
@@ -407,12 +511,15 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
                 }
 
                 if (voiceMode) {
+
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        horizontalAlignment =
+                            Alignment.CenterHorizontally,
+                        verticalArrangement =
+                            Arrangement.Center
                     ) {
                         Text(
                             "YOUR ASSISTANT",
@@ -421,7 +528,7 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
                             letterSpacing = 3.sp
                         )
 
-                        Spacer(Modifier.height(30.dp))
+                        Spacer(Modifier.height(28.dp))
 
                         Box(
                             modifier = Modifier
@@ -432,12 +539,12 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
                                 )
                                 .border(
                                     2.dp,
-                                    ElectricBlue.copy(alpha = 0.55f),
+                                    ElectricBlue.copy(alpha = 0.6f),
                                     CircleShape
                                 )
                                 .padding(16.dp)
                                 .background(
-                                    ElectricBlue.copy(alpha = 0.13f),
+                                    ElectricBlue.copy(alpha = 0.18f),
                                     CircleShape
                                 )
                                 .clickable(enabled = !busy) {
@@ -455,10 +562,13 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
                             )
                         }
 
-                        Spacer(Modifier.height(28.dp))
+                        Spacer(Modifier.height(26.dp))
 
                         Text(
-                            if (busy) "Marcus is thinking" else "Talk to Marcus",
+                            if (busy)
+                                "Marcus is thinking"
+                            else
+                                "Talk to Marcus",
                             color = White,
                             fontSize = 23.sp,
                             fontWeight = FontWeight.Medium
@@ -472,12 +582,12 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
                             fontSize = 13.sp
                         )
 
-                        Spacer(Modifier.height(24.dp))
+                        Spacer(Modifier.height(22.dp))
 
                         if (messages.isNotEmpty()) {
                             Text(
                                 messages.last().content,
-                                color = White.copy(alpha = 0.8f),
+                                color = White.copy(alpha = 0.85f),
                                 fontSize = 14.sp,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -488,93 +598,42 @@ fun MarcusScreen(prefs: android.content.SharedPreferences) {
                                     .padding(14.dp)
                             )
                         }
-                    }
 
-                    if (messageInput.isNotBlank()) {
-                        Text(
-                            messageInput,
-                            color = White,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    Panel,
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .padding(12.dp)
-                        )
+                        if (messageInput.isNotBlank()) {
+                            Spacer(Modifier.height(10.dp))
 
-                        Button(
-                            onClick = { sendMessage() },
-                            enabled = !busy,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = ElectricBlue
+                            Text(
+                                messageInput,
+                                color = White,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        Panel,
+                                        RoundedCornerShape(12.dp)
+                                    )
+                                    .padding(12.dp)
                             )
-                        ) {
-                            Text("Send to Marcus")
-                        }
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(top = 12.dp),
-                        state = listState,
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(messages) { item ->
-                            val isUser = item.role == "user"
 
-                            Row(
+                            Button(
+                                onClick = {
+                                    sendMessage()
+                                },
+                                enabled = !busy,
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = if (isUser) {
-                                    Arrangement.End
-                                } else {
-                                    Arrangement.Start
-                                }
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = ElectricBlue
+                                )
                             ) {
-                                Column(
-                                    modifier = Modifier
-                                        .widthIn(max = 290.dp)
-                                        .background(
-                                            if (isUser) ElectricBlue else Panel,
-                                            RoundedCornerShape(16.dp)
-                                        )
-                                        .padding(12.dp)
-                                ) {
-                                    Text(
-                                        if (isUser) "You" else "Marcus",
-                                        color = White.copy(alpha = 0.65f),
-                                        fontSize = 11.sp
-                                    )
-
-                                    Spacer(Modifier.height(4.dp))
-
-                                    Text(
-                                        item.content,
-                                        color = White,
-                                        fontSize = 15.sp
-                                    )
-                                }
+                                Text("Send to Marcus")
                             }
                         }
                     }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        BasicTextField(
-                            value = messageInput,
-                            onValueChange = { messageInput = it },
-                            modifier = Modifier
-                                .weight(1f)
-                                .background(
-                                    Panel,
-                                    RoundedCornerShape(24.dp)
-                                )
-                                .padding(
-                                    horizontal = 16.dp,
-                                    vertical = 14.dp
-                               
+                } else {
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(top = 10.dp),
+                      
