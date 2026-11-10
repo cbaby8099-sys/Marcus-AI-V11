@@ -1,8 +1,9 @@
 
 package com.marcusai.app
 
-import android.content.Context
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
@@ -11,24 +12,21 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -41,252 +39,53 @@ import java.util.Locale
 private const val WORKER_URL =
     "https://marcus-ai.cbaby8099.workers.dev"
 
-private val Obsidian = Color(0xFF080B12)
-private val ElectricBlue = Color(0xFF168BFF)
-private val Panel = Color(0xFF111827)
-private val White = Color(0xFFF4F7FF)
-private val Muted = Color(0xFF8995A8)
-
-private data class ChatMessage(
-    val role: String,
-    val content: String
-)
+private val BackgroundColor = Color(0xFF080B12)
+private val BlueColor = Color(0xFF168BFF)
+private val PanelColor = Color(0xFF111827)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val prefs = getSharedPreferences(
-            "marcus_private",
-            Context.MODE_PRIVATE
-        )
-
         setContent {
-            MaterialTheme(
-                colorScheme = darkColorScheme(
-                    primary = ElectricBlue,
-                    background = Obsidian,
-                    surface = Panel,
-                    onBackground = White,
-                    onSurface = White
-                )
-            ) {
-                MarcusScreen(prefs)
-            }
+            MarcusApp()
         }
     }
 }
 
 @Composable
-private fun MarcusScreen(
-    prefs: android.content.SharedPreferences
-) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+fun MarcusApp() {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    val prefs = remember {
+        context.getSharedPreferences("marcus_user_id", 0)
+    }
+
     var userId by remember {
-        mutableStateOf(
-            prefs.getString("marcus_user_id", "") ?: ""
-        )
+        mutableStateOf(prefs.getString("userId", "") ?: "")
     }
 
-    var idInput by remember { mutableStateOf("") }
-    var messageInput by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("Ready") }
+    var message by remember { mutableStateOf("") }
+    var reply by remember {
+        mutableStateOf("Marcus is ready. Tap the blue orb to speak.")
+    }
     var busy by remember { mutableStateOf(false) }
-    var voiceMode by remember { mutableStateOf(true) }
+    var chatMode by remember { mutableStateOf(false) }
+    var messages by remember { mutableStateOf(listOf<String>()) }
 
-    val messages = remember {
-        mutableStateListOf<ChatMessage>()
-    }
+    var tts by remember { mutableStateOf<TextToSpeech?>(null) }
 
-    val listState = rememberLazyListState()
-
-    val tts = remember {
-        TextToSpeech(context) { result ->
-            if (result == TextToSpeech.SUCCESS) {
-                // Voice engine ready
+    DisposableEffect(context) {
+        val engine = TextToSpeech(context) {
+            if (it == TextToSpeech.SUCCESS) {
+                tts?.language = Locale.UK
             }
         }
-    }
-
-    DisposableEffect(tts) {
+        tts = engine
         onDispose {
-            tts.stop()
-            tts.shutdown()
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        try {
-            val saved = prefs.getString(
-                "chat_history",
-                "[]"
-            ) ?: "[]"
-
-            val array = JSONArray(saved)
-
-            for (i in 0 until array.length()) {
-                val item = array.getJSONObject(i)
-
-                messages.add(
-                    ChatMessage(
-                        item.optString("role"),
-                        item.optString("content")
-                    )
-                )
-            }
-        } catch (_: Exception) {
-            messages.clear()
-        }
-    }
-
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(
-                messages.lastIndex
-            )
-        }
-    }
-
-    fun saveHistory() {
-        val array = JSONArray()
-
-        messages.takeLast(40).forEach {
-            array.put(
-                JSONObject()
-                    .put("role", it.role)
-                    .put("content", it.content)
-            )
-        }
-
-        prefs.edit()
-            .putString("chat_history", array.toString())
-            .apply()
-    }
-
-    fun sendMessage() {
-        val text = messageInput.trim()
-
-        if (
-            text.isEmpty() ||
-            busy ||
-            userId.isBlank()
-        ) return
-
-        messageInput = ""
-
-        messages.add(
-            ChatMessage("user", text)
-        )
-
-        saveHistory()
-
-        busy = true
-        status = "Marcus is thinking..."
-
-        scope.launch {
-            try {
-                val history = messages
-                    .takeLast(12)
-                    .map {
-                        it.role to it.content
-                    }
-
-                val reply = withContext(Dispatchers.IO) {
-                    sendToWorker(
-                        userId,
-                        text,
-                        history
-                    )
-                }
-
-                messages.add(
-                    ChatMessage("assistant", reply)
-                )
-
-                saveHistory()
-                status = "Marcus is ready"
-
-                if (voiceMode) {
-                    tts.language = Locale.getDefault()
-
-                    tts.speak(
-                        reply,
-                        TextToSpeech.QUEUE_FLUSH,
-                        null,
-                        "marcus_reply"
-                    )
-                }
-
-            } catch (_: Exception) {
-                messages.add(
-                    ChatMessage(
-                        "assistant",
-                        "I couldn't connect. Check your internet and try again."
-                    )
-                )
-
-                saveHistory()
-                status = "Connection problem"
-
-            } finally {
-                busy = false
-            }
-        }
-    }
-
-    fun loadMemory() {
-        if (busy || userId.isBlank()) return
-
-        busy = true
-        status = "Loading V10 memory..."
-
-        scope.launch {
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    requestWorker(
-                        JSONObject()
-                            .put("action", "get_memory")
-                            .put("userId", userId)
-                    )
-                }
-
-                val memory = result.opt("memory")
-
-                val display = when {
-                    memory == null ->
-                        result.optString(
-                            "reply",
-                            result.toString()
-                        )
-
-                    memory is JSONObject ->
-                        memory.toString(2)
-
-                    memory is JSONArray ->
-                        memory.toString(2)
-
-                    else -> memory.toString()
-                }
-
-                messages.add(
-                    ChatMessage(
-                        "assistant",
-                        "V10 MEMORY\n$display"
-                    )
-                )
-
-                saveHistory()
-                status = "Memory loaded"
-                voiceMode = false
-
-            } catch (_: Exception) {
-                status = "Memory could not load"
-
-            } finally {
-                busy = false
-            }
+            engine.stop()
+            engine.shutdown()
         }
     }
 
@@ -294,11 +93,7 @@ private fun MarcusScreen(
         rememberLauncherForActivityResult(
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
-
-            if (
-                result.resultCode ==
-                android.app.Activity.RESULT_OK
-            ) {
+            if (result.resultCode == ComponentActivity.RESULT_OK) {
                 val spoken = result.data
                     ?.getStringArrayListExtra(
                         RecognizerIntent.EXTRA_RESULTS
@@ -306,8 +101,25 @@ private fun MarcusScreen(
                     ?.firstOrNull()
 
                 if (!spoken.isNullOrBlank()) {
-                    messageInput = spoken
-                    status = "Voice captured — ready to send"
+                    message = spoken
+                    scope.launch {
+                        busy = true
+                        val answer = sendToWorker(
+                            userId,
+                            spoken,
+                            messages
+                        )
+                        reply = answer
+                        messages = messages + "You: $spoken" +
+                            "Marcus: $answer"
+                        tts?.speak(
+                            answer,
+                            TextToSpeech.QUEUE_FLUSH,
+                            null,
+                            "marcus_reply"
+                        )
+                        busy = false
+                    }
                 }
             }
         }
@@ -316,7 +128,6 @@ private fun MarcusScreen(
         rememberLauncherForActivityResult(
             ActivityResultContracts.RequestPermission()
         ) { granted ->
-
             if (granted) {
                 val intent = Intent(
                     RecognizerIntent.ACTION_RECOGNIZE_SPEECH
@@ -325,315 +136,334 @@ private fun MarcusScreen(
                         RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                         RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
                     )
-
                     putExtra(
                         RecognizerIntent.EXTRA_LANGUAGE,
                         Locale.getDefault()
                     )
-
                     putExtra(
                         RecognizerIntent.EXTRA_PROMPT,
                         "Speak to Marcus"
                     )
                 }
-
-                try {
-                    speechLauncher.launch(intent)
-                } catch (_: Exception) {
-                    status = "Speech service unavailable"
-                }
-
-            } else {
-                status = "Microphone permission is required"
+                speechLauncher.launch(intent)
             }
         }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = Obsidian
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    horizontal = 18.dp,
-                    vertical = 16.dp
-                )
-        ) {
+    fun startListening() {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+        if (granted) {
+            val intent = Intent(
+                RecognizerIntent.ACTION_RECOGNIZE_SPEECH
+            ).apply {
+                putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                )
+                putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE,
+                    Locale.getDefault()
+                )
+            }
+            speechLauncher.launch(intent)
+        } else {
+            permissionLauncher.launch(
+                Manifest.permission.RECORD_AUDIO
+            )
+        }
+    }
+
+    MaterialTheme {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = BackgroundColor
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(
-                    modifier = Modifier.weight(1f)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "MARCUS",
-                        color = White,
-                        fontSize = 24.sp,
+                        "MARCUS AI",
+                        color = BlueColor,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
                     )
 
-                    Text(
-                        "PERSONAL AI ASSISTANT",
-                        color = ElectricBlue,
-                        fontSize = 10.sp,
-                        letterSpacing = 2.sp
-                    )
-                }
-
-                Text(
-                    "V11",
-                    color = ElectricBlue,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .background(
-                            Panel,
-                            RoundedCornerShape(20.dp)
-                        )
-                        .padding(
-                            horizontal = 14.dp,
-                            vertical = 8.dp
-                        )
-                )
-            }
-
-            Spacer(Modifier.height(10.dp))
-
-            Text(
-                status,
-                color = Muted,
-                fontSize = 12.sp
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            if (userId.isBlank()) {
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        "Connect your V10 account",
-                        color = White,
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    Spacer(Modifier.height(12.dp))
-
-                    BasicTextField(
-                        value = idInput,
-                        onValueChange = {
-                            idInput = it
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                Panel,
-                                RoundedCornerShape(14.dp)
-                            )
-                            .padding(16.dp),
-                        textStyle = TextStyle(
-                            color = White,
-                            fontSize = 14.sp
-                        ),
-                        decorationBox = { inner ->
-                            if (idInput.isEmpty()) {
-                                Text(
-                                    "Paste your V10 account ID",
-                                    color = Muted
-                                )
-                            }
-                            inner()
-                        }
-                    )
-
-                    Spacer(Modifier.height(12.dp))
-
-                    Button(
-                        onClick = {
-                            val id = idInput.trim()
-
-                            if (id.isNotEmpty()) {
-                                prefs.edit()
-                                    .putString(
-                                        "marcus_user_id",
-                                        id
-                                    )
-                                    .apply()
-
-                                userId = id
-                                status = "V10 account connected"
-                            }
-                        },
-                        enabled = idInput.isNotBlank(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = ElectricBlue
-                        )
-                    ) {
-                        Text("Connect Marcus")
-                    }
-                }
-
-            } else {
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Panel,
-                            RoundedCornerShape(16.dp)
-                        )
-                        .padding(5.dp),
-                    horizontalArrangement =
-                        Arrangement.spacedBy(5.dp)
-                ) {
-                    ModeButton(
-                        label = "VOICE",
-                        selected = voiceMode,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        voiceMode = true
-                    }
-
-                    ModeButton(
-                        label = "CHAT",
-                        selected = !voiceMode,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        voiceMode = false
-                    }
-                }
-
-                if (voiceMode) {
-
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        horizontalAlignment =
-                            Alignment.CenterHorizontally,
-                        verticalArrangement =
-                            Arrangement.Center
+                    TextButton(
+                        onClick = { chatMode = !chatMode }
                     ) {
                         Text(
-                            "YOUR ASSISTANT",
-                            color = Muted,
-                            fontSize = 11.sp,
-                            letterSpacing = 3.sp
+                            if (chatMode) "VOICE" else "CHAT",
+                            color = BlueColor
                         )
+                    }
+                }
 
-                        Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(24.dp))
 
-                        Box(
-                            modifier = Modifier
-                                .size(205.dp)
-                                .background(
-                                    ElectricBlue.copy(alpha = 0.08f),
-                                    CircleShape
-                                )
-                                .border(
-                                    2.dp,
-                                    ElectricBlue.copy(alpha = 0.6f),
-                                    CircleShape
-                                )
-                                .padding(16.dp)
-                                .background(
-                                    ElectricBlue.copy(alpha = 0.18f),
-                                    CircleShape
-                                )
-                                .clickable(enabled = !busy) {
-                                    permissionLauncher.launch(
-                                        android.Manifest.permission.RECORD_AUDIO
-                                    )
-                                },
-                            contentAlignment = Alignment.Center
+                if (!chatMode) {
+                    Spacer(Modifier.weight(1f))
+
+                    Box(
+                        modifier = Modifier
+                            .size(190.dp)
+                            .background(
+                                BlueColor.copy(alpha = 0.12f),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Button(
+                            onClick = { startListening() },
+                            modifier = Modifier.size(145.dp),
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = BlueColor
+                            )
                         ) {
                             Text(
-                                if (busy) "..." else "M",
-                                color = White,
-                                fontSize = 76.sp,
-                                fontWeight = FontWeight.Light
+                                "M",
+                                fontSize = 54.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
                             )
-                        }
-
-                        Spacer(Modifier.height(26.dp))
-
-                        Text(
-                            if (busy)
-                                "Marcus is thinking"
-                            else
-                                "Talk to Marcus",
-                            color = White,
-                            fontSize = 23.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-
-                        Text(
-                            "Tap the blue orb to speak",
-                            color = Muted,
-                            fontSize = 13.sp
-                        )
-
-                        Spacer(Modifier.height(22.dp))
-
-                        if (messages.isNotEmpty()) {
-                            Text(
-                                messages.last().content,
-                                color = White.copy(alpha = 0.85f),
-                                fontSize = 14.sp,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(
-                                        Panel,
-                                        RoundedCornerShape(16.dp)
-                                    )
-                                    .padding(14.dp)
-                            )
-                        }
-
-                        if (messageInput.isNotBlank()) {
-                            Spacer(Modifier.height(10.dp))
-
-                            Text(
-                                messageInput,
-                                color = White,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(
-                                        Panel,
-                                        RoundedCornerShape(12.dp)
-                                    )
-                                    .padding(12.dp)
-                            )
-
-                            Button(
-                                onClick = {
-                                    sendMessage()
-                                },
-                                enabled = !busy,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = ElectricBlue
-                                )
-                            ) {
-                                Text("Send to Marcus")
-                            }
                         }
                     }
 
-                } else {
+                    Spacer(Modifier.height(30.dp))
 
+                    Text(
+                        if (busy) "Marcus is thinking..."
+                        else "Tap to speak with Marcus",
+                        color = BlueColor,
+                        fontSize = 16.sp
+                    )
+
+                    Spacer(Modifier.height(20.dp))
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = PanelColor
+                        ),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Text(
+                            reply,
+                            modifier = Modifier.padding(20.dp),
+                            color = Color.White,
+                            fontSize = 16.sp
+                        )
+                    }
+
+                    Spacer(Modifier.weight(1f))
+
+                } else {
                     LazyColumn(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxWidth()
-                            .padding(top = 10.dp),
-                      
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(messages) { item ->
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = PanelColor
+                                )
+                            ) {
+                                Text(
+                                    item,
+                                    modifier = Modifier.padding(14.dp),
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = message,
+                        onValueChange = { message = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = {
+                            Text("Message Marcus...")
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = BlueColor,
+                            unfocusedBorderColor = Color.Gray
+                        )
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { startListening() },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PanelColor
+                            )
+                        ) {
+                            Text("Speak", color = BlueColor)
+                        }
+
+                        Button(
+                            onClick = {
+                                val sent = message.trim()
+                                if (sent.isNotEmpty() && !busy) {
+                                    scope.launch {
+                                        busy = true
+                                        messages = messages +
+                                            "You: $sent"
+                                        message = ""
+
+                                        val answer = sendToWorker(
+                                            userId,
+                                            sent,
+                                            messages
+                                        )
+
+                                        messages = messages +
+                                            "Marcus: $answer"
+                                        reply = answer
+
+                                        tts?.speak(
+                                            answer,
+                                            TextToSpeech.QUEUE_FLUSH,
+                                            null,
+                                            "marcus_chat"
+                                        )
+                                        busy = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = BlueColor
+                            )
+                        ) {
+                            Text("Send")
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        if (!busy) {
+                            scope.launch {
+                                busy = true
+                                reply = requestWorker(
+                                    userId,
+                                    "get_memory"
+                                )
+                                busy = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("MEMORY", color = BlueColor)
+                }
+            }
+        }
+    }
+}
+
+suspend fun sendToWorker(
+    userId: String,
+    message: String,
+    history: List<String>
+): String {
+    return withContext(Dispatchers.IO) {
+        try {
+            val historyArray = JSONArray()
+            history.forEach { historyArray.put(it) }
+
+            val data = JSONObject().apply {
+                put("action", "chat")
+                put("userId", userId)
+                put("message", message)
+                put("history", historyArray)
+            }
+
+            postToWorker(data)
+        } catch (e: Exception) {
+            "Connection error: ${e.message}"
+        }
+    }
+}
+
+suspend fun requestWorker(
+    userId: String,
+    action: String
+): String {
+    return withContext(Dispatchers.IO) {
+        try {
+            val data = JSONObject().apply {
+                put("action", action)
+                put("userId", userId)
+            }
+            postToWorker(data)
+        } catch (e: Exception) {
+            "Memory connection error: ${e.message}"
+        }
+    }
+}
+
+private fun postToWorker(data: JSONObject): String {
+    val connection = URL(WORKER_URL)
+        .openConnection() as HttpURLConnection
+
+    return try {
+        connection.requestMethod = "POST"
+        connection.connectTimeout = 15000
+        connection.readTimeout = 20000
+        connection.doOutput = true
+        connection.setRequestProperty(
+            "Content-Type",
+            "application/json"
+        )
+
+        connection.outputStream.use {
+            it.write(data.toString().toByteArray(Charsets.UTF_8))
+        }
+
+        val stream = if (connection.responseCode in 200..299) {
+            connection.inputStream
+        } else {
+            connection.errorStream
+        }
+
+        val response = stream.bufferedReader().use {
+            it.readText()
+        }
+
+        val json = JSONObject(response)
+        json.optString(
+            "reply",
+            json.optString(
+                "response",
+                response
+            )
+        )
+    } finally {
+        connection.disconnect()
+    }
+}
+
