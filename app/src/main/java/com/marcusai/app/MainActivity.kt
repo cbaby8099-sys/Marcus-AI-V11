@@ -466,4 +466,3 @@ private fun postToWorker(data: JSONObject): String {
         connection.disconnect()
     }
 }
-
