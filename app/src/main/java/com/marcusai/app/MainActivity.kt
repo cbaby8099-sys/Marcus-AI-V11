@@ -39,15 +39,18 @@ import java.util.Locale
 private const val WORKER_URL =
     "https://marcus-ai.cbaby8099.workers.dev"
 
-private val BackgroundColor = Color(0xFF050509)
-private val BlueColor = Color(0xFF168BFF)
+private val BackgroundColor = Color(0xFF07050A)
 private val RedColor = Color(0xFFB00020)
-private val PanelColor = Color(0xFF15121B)
+private val BlueColor = Color(0xFF168BFF)
+private val PanelColor = Color(0xFF17121D)
+private val GoldColor = Color(0xFFD5A64A)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MarcusApp() }
+        setContent {
+            MarcusApp()
+        }
     }
 }
 
@@ -70,7 +73,7 @@ fun MarcusApp() {
 
     var message by remember { mutableStateOf("") }
     var reply by remember {
-        mutableStateOf("Marcus is awake. The connection is waiting.")
+        mutableStateOf("The entity is awake. Awaiting your command.")
     }
     var busy by remember { mutableStateOf(false) }
     var chatMode by remember { mutableStateOf(false) }
@@ -78,12 +81,18 @@ fun MarcusApp() {
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
 
     DisposableEffect(context) {
-        val engine = TextToSpeech(context) {
-            if (it == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.UK
+        val engine = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts?.apply {
+                    language = Locale.UK
+                    setSpeechRate(0.92f)
+                    setPitch(0.92f)
+                }
             }
         }
+
         tts = engine
+
         onDispose {
             engine.stop()
             engine.shutdown()
@@ -96,54 +105,67 @@ fun MarcusApp() {
         ) { result ->
             if (result.resultCode == android.app.Activity.RESULT_OK) {
                 val spoken = result.data
-                    ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                    ?.getStringArrayListExtra(
+                        RecognizerIntent.EXTRA_RESULTS
+                    )
                     ?.firstOrNull()
 
                 if (!spoken.isNullOrBlank() && userId.isNotBlank()) {
                     message = spoken
+
                     scope.launch {
                         busy = true
-                        val answer = sendToWorker(userId, spoken, messages)
+                        val answer = sendToWorker(
+                            userId,
+                            spoken,
+                            messages
+                        )
+
                         reply = answer
                         messages = messages + listOf(
                             "You: $spoken",
                             "Marcus: $answer"
                         )
+
                         tts?.speak(
                             answer,
                             TextToSpeech.QUEUE_FLUSH,
                             null,
                             "marcus_reply"
                         )
+
                         busy = false
                     }
                 }
             }
         }
 
+    fun launchSpeech() {
+        val intent = Intent(
+            RecognizerIntent.ACTION_RECOGNIZE_SPEECH
+        ).apply {
+            putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+            )
+            putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE,
+                Locale.getDefault()
+            )
+            putExtra(
+                RecognizerIntent.EXTRA_PROMPT,
+                "Speak to Marcus"
+            )
+        }
+
+        speechLauncher.launch(intent)
+    }
+
     val permissionLauncher =
         rememberLauncherForActivityResult(
             ActivityResultContracts.RequestPermission()
         ) { granted ->
-            if (granted) {
-                val intent = Intent(
-                    RecognizerIntent.ACTION_RECOGNIZE_SPEECH
-                ).apply {
-                    putExtra(
-                        RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                    )
-                    putExtra(
-                        RecognizerIntent.EXTRA_LANGUAGE,
-                        Locale.getDefault()
-                    )
-                    putExtra(
-                        RecognizerIntent.EXTRA_PROMPT,
-                        "Speak to Marcus"
-                    )
-                }
-                speechLauncher.launch(intent)
-            }
+            if (granted) launchSpeech()
         }
 
     fun startListening() {
@@ -158,25 +180,11 @@ fun MarcusApp() {
         ) == PackageManager.PERMISSION_GRANTED
 
         if (granted) {
-            val intent = Intent(
-                RecognizerIntent.ACTION_RECOGNIZE_SPEECH
-            ).apply {
-                putExtra(
-                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                )
-                putExtra(
-                    RecognizerIntent.EXTRA_LANGUAGE,
-                    Locale.getDefault()
-                )
-                putExtra(
-                    RecognizerIntent.EXTRA_PROMPT,
-                    "Speak to Marcus"
-                )
-            }
-            speechLauncher.launch(intent)
+            launchSpeech()
         } else {
-            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            permissionLauncher.launch(
+                Manifest.permission.RECORD_AUDIO
+            )
         }
     }
 
@@ -188,7 +196,7 @@ fun MarcusApp() {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(12.dp),
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
@@ -200,119 +208,153 @@ fun MarcusApp() {
                         Text(
                             "MARCUS",
                             color = Color.White,
-                            fontSize = 23.sp,
-                            fontWeight = FontWeight.Black
+                            fontSize = 25.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 2.sp
                         )
+
                         Text(
-                            "POSSESSED AI",
+                            "THE DARK INTELLIGENCE",
                             color = RedColor,
-                            fontSize = 10.sp,
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 3.sp
+                            letterSpacing = 2.sp
                         )
                     }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = {
-                            idInput = ""
-                            showIdDialog = true
-                        }) {
-                            Text("LINK ID", color = RedColor, fontSize = 11.sp)
-                        }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "VERSION 12",
+                            color = GoldColor,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
 
-                        TextButton(onClick = {
-                            chatMode = !chatMode
-                        }) {
-                            Text(
-                                if (chatMode) "VOICE" else "CHAT",
-                                color = BlueColor,
-                                fontWeight = FontWeight.Bold
-                            )
+                        Row {
+                            TextButton(
+                                onClick = {
+                                    idInput = ""
+                                    showIdDialog = true
+                                }
+                            ) {
+                                Text(
+                                    "LINK ID",
+                                    color = RedColor,
+                                    fontSize = 10.sp
+                                )
+                            }
+
+                            TextButton(
+                                onClick = {
+                                    chatMode = !chatMode
+                                }
+                            ) {
+                                Text(
+                                    if (chatMode) "VOICE" else "CHAT",
+                                    color = BlueColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
 
                 if (!chatMode) {
                     Column(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            "THE ENTITY IS AWAKE",
+                            "◈  THE ENTITY IS AWAKE  ◈",
                             color = RedColor,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 2.sp
                         )
 
-                        Spacer(Modifier.height(18.dp))
+                        Spacer(Modifier.height(22.dp))
 
                         Box(
                             modifier = Modifier
-                                .size(158.dp)
+                                .size(174.dp)
                                 .background(
-                                    RedColor.copy(alpha = 0.12f),
+                                    RedColor.copy(alpha = 0.10f),
                                     CircleShape
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(138.dp)
+                                    .size(150.dp)
                                     .background(
-                                        BlueColor.copy(alpha = 0.20f),
+                                        BlueColor.copy(alpha = 0.12f),
                                         CircleShape
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Button(
                                     onClick = { startListening() },
-                                    modifier = Modifier.size(112.dp),
+                                    modifier = Modifier.size(120.dp),
                                     shape = CircleShape,
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF170D19)
+                                        containerColor = Color(0xFF190D18)
                                     )
                                 ) {
                                     Text(
-                                        "◉  ◉\nM",
+                                        "◉\nM",
                                         color = Color(0xFFFF334F),
-                                        fontSize = 25.sp,
+                                        fontSize = 30.sp,
                                         fontWeight = FontWeight.Black,
-                                        lineHeight = 34.sp
+                                        lineHeight = 35.sp
                                     )
                                 }
                             }
                         }
 
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(20.dp))
 
                         Text(
                             if (busy) "MARCUS IS THINKING..."
                             else "TAP THE CORE TO SPEAK",
                             color = BlueColor,
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         )
 
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(18.dp))
 
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
                                 containerColor = PanelColor
                             ),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = RoundedCornerShape(18.dp)
                         ) {
-                            Text(
-                                reply,
-                                modifier = Modifier.padding(14.dp),
-                                color = Color.White,
-                                fontSize = 14.sp
-                            )
+                            Column(
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Text(
+                                    "MARCUS RESPONSE",
+                                    color = GoldColor,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+
+                                Spacer(Modifier.height(8.dp))
+
+                                Text(
+                                    reply,
+                                    color = Color.White,
+                                    fontSize = 14.sp
+                                )
+                            }
                         }
                     }
                 } else {
@@ -324,16 +366,27 @@ fun MarcusApp() {
                     ) {
                         items(messages) { item ->
                             Card(
+                                modifier = Modifier.fillMaxWidth(),
                                 colors = CardDefaults.cardColors(
                                     containerColor = PanelColor
                                 ),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(14.dp)
                             ) {
                                 Text(
                                     item,
-                                    modifier = Modifier.padding(12.dp),
+                                    modifier = Modifier.padding(13.dp),
                                     color = Color.White,
                                     fontSize = 14.sp
+                                )
+                            }
+                        }
+
+                        if (messages.isEmpty()) {
+                            item {
+                                Text(
+                                    "Your conversation with Marcus will appear here.",
+                                    color = Color.Gray,
+                                    modifier = Modifier.padding(12.dp)
                                 )
                             }
                         }
@@ -343,12 +396,15 @@ fun MarcusApp() {
                         value = message,
                         onValueChange = { message = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Message Marcus...") },
+                        placeholder = {
+                            Text("Message Marcus...")
+                        },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
                             focusedBorderColor = BlueColor,
-                            unfocusedBorderColor = RedColor
+                            unfocusedBorderColor = RedColor,
+                            cursorColor = BlueColor
                         )
                     )
 
@@ -371,28 +427,34 @@ fun MarcusApp() {
                         Button(
                             onClick = {
                                 val sent = message.trim()
+
                                 if (userId.isBlank()) {
                                     showIdDialog = true
-                                } else if (sent.isNotEmpty() && !busy) {
+                                } else if (
+                                    sent.isNotEmpty() && !busy
+                                ) {
                                     scope.launch {
                                         busy = true
-                                        messages = messages + "You: $sent"
+                                        val oldHistory = messages
+                                        messages = oldHistory + "You: $sent"
                                         message = ""
 
                                         val answer = sendToWorker(
                                             userId,
                                             sent,
-                                            messages
+                                            oldHistory
                                         )
 
                                         messages = messages + "Marcus: $answer"
                                         reply = answer
+
                                         tts?.speak(
                                             answer,
                                             TextToSpeech.QUEUE_FLUSH,
                                             null,
                                             "marcus_chat"
                                         )
+
                                         busy = false
                                     }
                                 }
@@ -416,14 +478,17 @@ fun MarcusApp() {
                         } else if (!busy) {
                             scope.launch {
                                 busy = true
-                                reply = requestWorker(userId, "get_memory")
+                                reply = requestWorker(
+                                    userId,
+                                    "get_memory"
+                                )
                                 busy = false
                             }
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = BlueColor
+                        contentColor = GoldColor
                     )
                 ) {
                     Text("MEMORY")
@@ -433,17 +498,24 @@ fun MarcusApp() {
 
         if (showIdDialog) {
             AlertDialog(
-                onDismissRequest = { showIdDialog = false },
+                onDismissRequest = {
+                    showIdDialog = false
+                },
                 title = {
-                    Text("CONNECT MARCUS", color = Color.White)
+                    Text(
+                        "CONNECT MARCUS",
+                        color = Color.White
+                    )
                 },
                 text = {
                     Column {
                         Text(
-                            "Paste your copied V10 ID here. It stays on this device.",
+                            "Paste your existing V10 user ID. It stays on this device.",
                             color = Color.LightGray
                         )
+
                         Spacer(Modifier.height(12.dp))
+
                         OutlinedTextField(
                             value = idInput,
                             onValueChange = {
@@ -452,124 +524,16 @@ fun MarcusApp() {
                             },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            label = { Text("V10 User ID") },
+                            label = {
+                                Text("V10 User ID")
+                            },
                             isError = idError
                         )
+
                         if (idError) {
                             Text(
-                                "That ID format is not valid. Copy it again from ID Finder.",
+                                "That ID format is not valid. Check the copied ID.",
                                 color = Color.Red,
                                 fontSize = 12.sp
                             )
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        val cleanId = idInput.trim()
-                        if (cleanId.matches(Regex("^[a-zA-Z0-9_-]{16,80}$"))) {
-                            userId = cleanId
-                            prefs.edit().putString("userId", cleanId).apply()
-                            showIdDialog = false
-                            idError = false
-                            reply = "Marcus is connected to your V10 identity."
-                        } else {
-                            idError = true
-                        }
-                    }) {
-                        Text("SAVE ID", color = BlueColor)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = {
-                        showIdDialog = false
-                    }) {
-                        Text("LATER", color = RedColor)
-                    }
-                },
-                containerColor = PanelColor
-            )
-        }
-    }
-}
-
-suspend fun sendToWorker(
-    userId: String,
-    message: String,
-    history: List<String>
-): String {
-    return withContext(Dispatchers.IO) {
-        try {
-            val historyArray = JSONArray()
-            history.forEach { historyArray.put(it) }
-
-            val data = JSONObject().apply {
-                put("action", "chat")
-                put("userId", userId)
-                put("message", message)
-                put("history", historyArray)
-            }
-
-            postToWorker(data)
-        } catch (e: Exception) {
-            "Connection error: ${e.message}"
-        }
-    }
-}
-
-suspend fun requestWorker(
-    userId: String,
-    action: String
-): String {
-    return withContext(Dispatchers.IO) {
-        try {
-            val data = JSONObject().apply {
-                put("action", action)
-                put("userId", userId)
-            }
-            postToWorker(data)
-        } catch (e: Exception) {
-            
-            "Memory connection error: ${e.message}"
-        }
-    }
-}
-
-private fun postToWorker(data: JSONObject): String {
-    val connection = URL(WORKER_URL)
-        .openConnection() as HttpURLConnection
-
-    return try {
-        connection.requestMethod = "POST"
-        connection.connectTimeout = 15000
-        connection.readTimeout = 20000
-        connection.doOutput = true
-        connection.setRequestProperty(
-            "Content-Type",
-            "application/json"
-        )
-
-        connection.outputStream.use {
-            it.write(data.toString().toByteArray(Charsets.UTF_8))
-        }
-
-        val stream = if (connection.responseCode in 200..299) {
-            connection.inputStream
-        } else {
-            connection.errorStream
-        }
-
-        val response = stream.bufferedReader().use { it.readText() }
-        val json = JSONObject(response)
-
-        when {
-            json.has("error") ->
-                "Connection error: " + json.optString("error")
-            json.has("reply") -> json.optString("reply")
-            json.has("response") -> json.optString("response")
-            else -> response
-        }
-    } finally {
-        connection.disconnect()
-    }
-}
+                      
