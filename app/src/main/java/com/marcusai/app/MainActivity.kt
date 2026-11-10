@@ -93,7 +93,7 @@ fun MarcusApp() {
         rememberLauncherForActivityResult(
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
-            if (result.resultCode == ComponentActivity.RESULT_OK) {
+            if (result.resultCode == android.app.Activity.RESULT_OK {
                 val spoken = result.data
                     ?.getStringArrayListExtra(
                         RecognizerIntent.EXTRA_RESULTS
