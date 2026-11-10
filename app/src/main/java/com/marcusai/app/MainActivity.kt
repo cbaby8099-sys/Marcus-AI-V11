@@ -91,15 +91,18 @@ fun MarcusApp() {
     }
 
     DisposableEffect(Unit) {
-        val engine = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                engineLanguagePlaceholder()
-            }
-        }
-        tts = engine
-        engine.language = Locale.UK
-        engine.setSpeechRate(0.9f)
-        engine.setPitch(0.85f)
+    val engine = TextToSpeech(context, null)
+    tts = engine
+
+    engine.language = Locale.UK
+    engine.setSpeechRate(0.9f)
+    engine.setPitch(0.85f)
+
+    onDispose {
+        engine.stop()
+        engine.shutdown()
+    }
+    }
 
         onDispose {
             recognizer?.cancel()
