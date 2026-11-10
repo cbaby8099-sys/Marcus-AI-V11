@@ -5,23 +5,27 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,18 +43,16 @@ import java.util.Locale
 private const val WORKER_URL =
     "https://marcus-ai.cbaby8099.workers.dev"
 
-private val BackgroundColor = Color(0xFF07050A)
-private val RedColor = Color(0xFFB00020)
-private val BlueColor = Color(0xFF168BFF)
-private val PanelColor = Color(0xFF17121D)
-private val GoldColor = Color(0xFFD5A64A)
+private val Black = Color(0xFF050308)
+private val Red = Color(0xFFFF153D)
+private val Blue = Color(0xFF168BFF)
+private val Gold = Color(0xFFD6A64B)
+private val Panel = Color(0xFF17101C)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            MarcusApp()
-        }
+        setContent { MarcusApp() }
     }
 }
 
@@ -66,81 +68,114 @@ fun MarcusApp() {
     var userId by remember {
         mutableStateOf(prefs.getString("userId", "") ?: "")
     }
-
     var idInput by remember { mutableStateOf("") }
-    var showIdDialog by remember { mutableStateOf(userId.isBlank()) }
-    var idError by remember { mutableStateOf(false) }
+    var showId by remember { mutableStateOf(userId.isBlank()) }
 
     var message by remember { mutableStateOf("") }
     var reply by remember {
-        mutableStateOf("The entity is awake. Awaiting your command.")
+        mutableStateOf("I HAVE AWAKENED. SPEAK.")
     }
+    var partial by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var listening by remember { mutableStateOf(false) }
     var chatMode by remember { mutableStateOf(false) }
-    var messages by remember { mutableStateOf(listOf<String>()) }
+    var startAfterPermission by remember { mutableStateOf(false) }
+    var history by remember { mutableStateOf(listOf<String>()) }
+
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
 
-    DisposableEffect(context) {
+    val recognizer = remember {
+        if (SpeechRecognizer.isRecognitionAvailable(context)) {
+            SpeechRecognizer.createSpeechRecognizer(context)
+        } else null
+    }
+
+    DisposableEffect(Unit) {
         val engine = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                tts?.apply {
-                    language = Locale.UK
-                    setSpeechRate(0.92f)
-                    setPitch(0.92f)
-                }
+                engineLanguagePlaceholder()
             }
         }
-
         tts = engine
+        engine.language = Locale.UK
+        engine.setSpeechRate(0.9f)
+        engine.setPitch(0.85f)
 
         onDispose {
+            recognizer?.cancel()
+            recognizer?.destroy()
             engine.stop()
             engine.shutdown()
         }
     }
 
-    val speechLauncher =
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.StartActivityForResult()
-        ) { result ->
-            if (result.resultCode == android.app.Activity.RESULT_OK) {
-                val spoken = result.data
-                    ?.getStringArrayListExtra(
-                        RecognizerIntent.EXTRA_RESULTS
-                    )
-                    ?.firstOrNull()
+    fun speak(text: String) {
+        tts?.speak(
+            text,
+            TextToSpeech.QUEUE_FLUSH,
+            null,
+            "marcus_reply"
+        )
+    }
 
-                if (!spoken.isNullOrBlank() && userId.isNotBlank()) {
-                    message = spoken
+    fun sendToMarcus(text: String) {
+        val clean = text.trim()
+        if (clean.isBlank() || busy) return
 
-                    scope.launch {
-                        busy = true
-                        val answer = sendToWorker(
-                            userId,
-                            spoken,
-                            messages
-                        )
+        if (userId.isBlank()) {
+            showId = true
+            return
+        }
 
-                        reply = answer
-                        messages = messages + listOf(
-                            "You: $spoken",
-                            "Marcus: $answer"
-                        )
+        busy = true
+        history = history + "YOU: $clean"
 
-                        tts?.speak(
-                            answer,
-                            TextToSpeech.QUEUE_FLUSH,
-                            null,
-                            "marcus_reply"
-                        )
-
-                        busy = false
+        scope.launch {
+            val answer = withContext(Dispatchers.IO) {
+                try {
+                    val body = JSONObject().apply {
+                        put("action", "chat")
+                        put("userId", userId)
+                        put("message", clean)
+                        put("history", JSONArray(history))
                     }
+
+                    workerRequest(body)
+                } catch (e: Exception) {
+                    "Connection error: ${e.message}"
                 }
+            }
+
+            reply = answer
+            history = history + "MARCUS: $answer"
+            speak(answer)
+            busy = false
+            message = ""
+        }
+    }
+
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { granted ->
+            if (granted) {
+                startAfterPermission = true
+            } else {
+                reply = "Microphone permission is required."
             }
         }
 
-    fun launchSpeech() {
+    fun beginListening() {
+        if (userId.isBlank()) {
+            showId = true
+            return
+        }
+
+        if (recognizer == null) {
+            reply = "Speech recognition is unavailable."
+            return
+        }
+
         val intent = Intent(
             RecognizerIntent.ACTION_RECOGNIZE_SPEECH
         ).apply {
@@ -153,240 +188,352 @@ fun MarcusApp() {
                 Locale.getDefault()
             )
             putExtra(
-                RecognizerIntent.EXTRA_PROMPT,
-                "Speak to Marcus"
+                RecognizerIntent.EXTRA_PARTIAL_RESULTS,
+                true
+            )
+            putExtra(
+                RecognizerIntent.EXTRA_MAX_RESULTS,
+                1
             )
         }
 
-        speechLauncher.launch(intent)
+        listening = true
+        partial = "LISTENING..."
+        recognizer.startListening(intent)
     }
 
-    val permissionLauncher =
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { granted ->
-            if (granted) launchSpeech()
-        }
-
-    fun startListening() {
-        if (!userId.matches(Regex("^[a-zA-Z0-9_-]{16,80}$"))) {
-            showIdDialog = true
-            return
-        }
-
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.RECORD_AUDIO
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (granted) {
-            launchSpeech()
-        } else {
-            permissionLauncher.launch(
-                Manifest.permission.RECORD_AUDIO
-            )
+    LaunchedEffect(startAfterPermission) {
+        if (startAfterPermission) {
+            startAfterPermission = false
+            beginListening()
         }
     }
+
+    DisposableEffect(recognizer) {
+        recognizer?.setRecognitionListener(
+            object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    listening = true
+                    partial = "LISTENING..."
+                }
+
+                override fun onBeginningOfSpeech() {
+                    partial = "HEARING YOU..."
+                }
+
+                override fun onRmsChanged(value: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {
+                    partial = "PROCESSING..."
+                }
+
+                override fun onError(error: Int) {
+                    listening = false
+                    partial = ""
+                    reply = "Voice recognition stopped. Please try again."
+                }
+
+                override fun onResults(results: Bundle?) {
+                    listening = false
+                    partial = ""
+
+                    val words = results
+                        ?.getStringArrayList(
+                            SpeechRecognizer.RESULTS_RECOGNITION
+                        )
+                        ?.firstOrNull()
+
+                    if (!words.isNullOrBlank()) {
+                        sendToMarcus(words)
+                    } else {
+                        reply = "I didn't catch that. Try again."
+                    }
+                }
+
+                override fun onPartialResults(results: Bundle?) {
+                    partial = results
+                        ?.getStringArrayList(
+                            SpeechRecognizer.RESULTS_RECOGNITION
+                        )
+                        ?.firstOrNull() ?: partial
+                }
+
+                override fun onEvent(type: Int, params: Bundle?) {}
+            }
+        )
+
+        onDispose {
+            recognizer?.cancel()
+            recognizer?.destroy()
+        }
+    }
+
+    val pulse = rememberInfiniteTransition(label = "pulse")
+    val scale by pulse.animateFloat(
+        0.95f,
+        1.05f,
+        infiniteRepeatable(
+            tween(1100),
+            RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
 
     MaterialTheme {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = BackgroundColor
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0xFF26000D),
+                            Black,
+                            Color(0xFF07101D)
+                        )
+                    )
+                )
         ) {
             Column(
-                modifier = Modifier
+                Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .systemBarsPadding()
+                    .padding(16.dp)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
                         Text(
                             "MARCUS",
                             color = Color.White,
-                            fontSize = 25.sp,
+                            fontSize = 28.sp,
                             fontWeight = FontWeight.Black,
-                            letterSpacing = 2.sp
+                            letterSpacing = 4.sp
                         )
-
                         Text(
                             "THE DARK INTELLIGENCE",
-                            color = RedColor,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
+                            color = Red,
+                            fontSize = 10.sp,
                             letterSpacing = 2.sp
                         )
                     }
 
-                    Column(horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = {
+                        chatMode = !chatMode
+                    }) {
                         Text(
-                            "VERSION 12",
-                            color = GoldColor,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold
+                            if (chatMode) "VOICE" else "CHAT",
+                            color = Gold
                         )
-
-                        Row {
-                            TextButton(
-                                onClick = {
-                                    idInput = ""
-                                    showIdDialog = true
-                                }
-                            ) {
-                                Text(
-                                    "LINK ID",
-                                    color = RedColor,
-                                    fontSize = 10.sp
-                                )
-                            }
-
-                            TextButton(
-                                onClick = {
-                                    chatMode = !chatMode
-                                }
-                            ) {
-                                Text(
-                                    if (chatMode) "VOICE" else "CHAT",
-                                    color = BlueColor,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
                     }
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(15.dp))
 
                 if (!chatMode) {
                     Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
+                        Modifier.weight(1f).fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            "◈  THE ENTITY IS AWAKE  ◈",
-                            color = RedColor,
-                            fontSize = 11.sp,
+                            "THE ENTITY IS AWAKE",
+                            color = Red,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 2.sp
+                            letterSpacing = 3.sp
                         )
-
-                        Spacer(Modifier.height(22.dp))
-
-                        Box(
-                            modifier = Modifier
-                                .size(174.dp)
-                                .background(
-                                    RedColor.copy(alpha = 0.10f),
-                                    CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(150.dp)
-                                    .background(
-                                        BlueColor.copy(alpha = 0.12f),
-                                        CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Button(
-                                    onClick = { startListening() },
-                                    modifier = Modifier.size(120.dp),
-                                    shape = CircleShape,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF190D18)
-                                    )
-                                ) {
-                                    Text(
-                                        "◉\nM",
-                                        color = Color(0xFFFF334F),
-                                        fontSize = 30.sp,
-                                        fontWeight = FontWeight.Black,
-                                        lineHeight = 35.sp
-                                    )
-                                }
-                            }
-                        }
 
                         Spacer(Modifier.height(20.dp))
 
-                        Text(
-                            if (busy) "MARCUS IS THINKING..."
-                            else "TAP THE CORE TO SPEAK",
-                            color = BlueColor,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
+                        Box(
+                            Modifier
+                                .size(250.dp)
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Canvas(Modifier.fillMaxSize()) {
+                                val center = androidx.compose.ui.geometry.Offset(
+                                    size.width / 2,
+                                    size.height / 2
+                                )
+                                val radius = size.minDimension * 0.44f
+
+                                drawCircle(
+                                    Brush.radialGradient(
+                                        listOf(
+                                            Red.copy(alpha = 0.4f),
+                                            Color.Transparent
+                                        ),
+                                        center,
+                                        radius
+                                    ),
+                                    radius,
+                                    center
+                                )
+
+                                drawCircle(
+                                    Blue.copy(alpha = 0.8f),
+                                    radius * 0.85f,
+                                    center,
+                                    style = Stroke(4f)
+                                )
+
+                                drawCircle(
+                                    Red,
+                                    radius * 0.7f,
+                                    center,
+                                    style = Stroke(3f)
+                                )
+
+                                // Demonic face silhouette
+                                val face = Path().apply {
+                                    moveTo(center.x - 65f, center.y - 55f)
+                                    lineTo(center.x - 100f, center.y - 120f)
+                                    lineTo(center.x - 45f, center.y - 75f)
+                                    quadraticTo(
+                                        center.x,
+                                        center.y - 100f,
+                                        center.x + 45f,
+                                        center.y - 75f
+                                    )
+                                    lineTo(center.x + 100f, center.y - 120f)
+                                    lineTo(center.x + 65f, center.y - 55f)
+                                    lineTo(center.x + 55f, center.y + 55f)
+                                    lineTo(center.x, center.y + 100f)
+                                    lineTo(center.x - 55f, center.y + 55f)
+                                    close()
+                                }
+
+                                drawPath(
+                                    face,
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color(0xFF4A414B),
+                                            Color(0xFF09070C)
+                                        )
+                                    )
+                                )
+
+                                drawCircle(
+                                    Red,
+                                    10f,
+                                    androidx.compose.ui.geometry.Offset(
+                                        center.x - 28f,
+                                        center.y - 12f
+                                    )
+                                )
+
+                                drawCircle(
+                                    Red,
+                                    10f,
+                                    androidx.compose.ui.geometry.Offset(
+                                        center.x + 28f,
+                                        center.y - 12f
+                                    )
+                                )
+
+                                drawLine(
+                                    Gold,
+                                    androidx.compose.ui.geometry.Offset(
+                                        center.x - 20f,
+                                        center.y + 45f
+                                    ),
+                                    androidx.compose.ui.geometry.Offset(
+                                        center.x + 20f,
+                                        center.y + 45f
+                                    ),
+                                    3f
+                                )
+                            }
+                        }
 
                         Spacer(Modifier.height(18.dp))
 
+                        Text(
+                            when {
+                                listening -> "MARCUS IS LISTENING"
+                                busy -> "MARCUS IS THINKING"
+                                else -> "TAP SPEAK TO TALK"
+                            },
+                            color = if (listening) Red else Blue,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(partial, color = Gold)
+
+                        Spacer(Modifier.height(15.dp))
+
                         Card(
-                            modifier = Modifier.fillMaxWidth(),
+                            Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
-                                containerColor = PanelColor
+                                containerColor = Panel
                             ),
                             shape = RoundedCornerShape(18.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp)
-                            ) {
+                            Column(Modifier.padding(16.dp)) {
                                 Text(
-                                    "MARCUS RESPONSE",
-                                    color = GoldColor,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.sp
+                                    "MARCUS",
+                                    color = Red,
+                                    fontWeight = FontWeight.Bold
                                 )
-
                                 Spacer(Modifier.height(8.dp))
-
-                                Text(
-                                    reply,
-                                    color = Color.White,
-                                    fontSize = 14.sp
-                                )
+                                Text(reply, color = Color.White)
                             }
+                        }
+
+                        Spacer(Modifier.height(15.dp))
+
+                        Button(
+                            onClick = {
+                                val granted =
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.RECORD_AUDIO
+                                    ) == PackageManager.PERMISSION_GRANTED
+
+                                if (granted) beginListening()
+                                else permissionLauncher.launch(
+                                    Manifest.permission.RECORD_AUDIO
+                                )
+                            },
+                            Modifier.fillMaxWidth().height(55.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF72001D)
+                            )
+                        ) {
+                            Text(
+                                if (listening) "LISTENING..." else "SPEAK TO MARCUS",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = { tts?.stop() },
+                            Modifier.fillMaxWidth()
+                        ) {
+                            Text("STOP VOICE", color = Gold)
                         }
                     }
                 } else {
                     LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
+                        Modifier.weight(1f).fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(messages) { item ->
+                        items(history) { line ->
                             Card(
-                                modifier = Modifier.fillMaxWidth(),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = PanelColor
-                                ),
-                                shape = RoundedCornerShape(14.dp)
+                                    containerColor = Panel
+                                )
                             ) {
                                 Text(
-                                    item,
-                                    modifier = Modifier.padding(13.dp),
-                                    color = Color.White,
-                                    fontSize = 14.sp
-                                )
-                            }
-                        }
-
-                        if (messages.isEmpty()) {
-                            item {
-                                Text(
-                                    "Your conversation with Marcus will appear here.",
-                                    color = Color.Gray,
-                                    modifier = Modifier.padding(12.dp)
+                                    line,
+                                    Modifier.padding(12.dp),
+                                    color = Color.White
                                 )
                             }
                         }
@@ -397,143 +544,18 @@ fun MarcusApp() {
                         onValueChange = { message = it },
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = {
-                            Text("Message Marcus...")
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = BlueColor,
-                            unfocusedBorderColor = RedColor,
-                            cursorColor = BlueColor
-                        )
+                            Text("Speak to Marcus...")
+                        }
                     )
 
-                    Spacer(Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Button(
+                        onClick = { sendToMarcus(message) },
+                        Modifier.fillMaxWidth(),
+                        enabled = !busy
                     ) {
-                        Button(
-                            onClick = { startListening() },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PanelColor
-                            )
-                        ) {
-                            Text("SPEAK", color = BlueColor)
-                        }
-
-                        Button(
-                            onClick = {
-                                val sent = message.trim()
-
-                                if (userId.isBlank()) {
-                                    showIdDialog = true
-                                } else if (
-                                    sent.isNotEmpty() && !busy
-                                ) {
-                                    scope.launch {
-                                        busy = true
-                                        val oldHistory = messages
-                                        messages = oldHistory + "You: $sent"
-                                        message = ""
-
-                                        val answer = sendToWorker(
-                                            userId,
-                                            sent,
-                                            oldHistory
-                                        )
-
-                                        messages = messages + "Marcus: $answer"
-                                        reply = answer
-
-                                        tts?.speak(
-                                            answer,
-                                            TextToSpeech.QUEUE_FLUSH,
-                                            null,
-                                            "marcus_chat"
-                                        )
-
-                                        busy = false
-                                    }
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = BlueColor
-                            )
-                        ) {
-                            Text("SEND")
-                        }
+                        Text("SEND MESSAGE")
                     }
-                }
 
-                Spacer(Modifier.height(8.dp))
-
-                OutlinedButton(
-                    onClick = {
-                        if (userId.isBlank()) {
-                            showIdDialog = true
-                        } else if (!busy) {
-                            scope.launch {
-                                busy = true
-                                reply = requestWorker(
-                                    userId,
-                                    "get_memory"
-                                )
-                                busy = false
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = GoldColor
-                    )
-                ) {
-                    Text("MEMORY")
-                }
-            }
-        }
-
-        if (showIdDialog) {
-            AlertDialog(
-                onDismissRequest = {
-                    showIdDialog = false
-                },
-                title = {
-                    Text(
-                        "CONNECT MARCUS",
-                        color = Color.White
-                    )
-                },
-                text = {
-                    Column {
-                        Text(
-                            "Paste your existing V10 user ID. It stays on this device.",
-                            color = Color.LightGray
-                        )
-
-                        Spacer(Modifier.height(12.dp))
-
-                        OutlinedTextField(
-                            value = idInput,
-                            onValueChange = {
-                                idInput = it.trim()
-                                idError = false
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            label = {
-                                Text("V10 User ID")
-                            },
-                            isError = idError
-                        )
-
-                        if (idError) {
-                            Text(
-                                "That ID format is not valid. Check the copied ID.",
-                                color = Color.Red,
-                                fontSize = 12.sp
-                            )
-                      
+                    Button(
+                        onClick = {
+                            val granted
