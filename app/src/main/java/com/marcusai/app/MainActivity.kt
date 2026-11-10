@@ -529,4 +529,47 @@ suspend fun requestWorker(
             }
             postToWorker(data)
         } catch (e: Exception) {
-            "Memory co
+            
+            "Memory connection error: ${e.message}"
+        }
+    }
+}
+
+private fun postToWorker(data: JSONObject): String {
+    val connection = URL(WORKER_URL)
+        .openConnection() as HttpURLConnection
+
+    return try {
+        connection.requestMethod = "POST"
+        connection.connectTimeout = 15000
+        connection.readTimeout = 20000
+        connection.doOutput = true
+        connection.setRequestProperty(
+            "Content-Type",
+            "application/json"
+        )
+
+        connection.outputStream.use {
+            it.write(data.toString().toByteArray(Charsets.UTF_8))
+        }
+
+        val stream = if (connection.responseCode in 200..299) {
+            connection.inputStream
+        } else {
+            connection.errorStream
+        }
+
+        val response = stream.bufferedReader().use { it.readText() }
+        val json = JSONObject(response)
+
+        when {
+            json.has("error") ->
+                "Connection error: " + json.optString("error")
+            json.has("reply") -> json.optString("reply")
+            json.has("response") -> json.optString("response")
+            else -> response
+        }
+    } finally {
+        connection.disconnect()
+    }
+}
