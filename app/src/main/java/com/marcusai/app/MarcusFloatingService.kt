@@ -164,7 +164,7 @@ class MarcusFloatingService : Service() {
 
     private fun openMarcusVoice() {
         val intent = Intent(this, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             putExtra(EXTRA_START_VOICE, true)
         }
         startActivity(intent)
