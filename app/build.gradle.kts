@@ -1,4 +1,3 @@
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -13,8 +12,8 @@ android {
         applicationId = "com.marcusai.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "11.0"
+        versionCode = 19
+        versionName = "19.0"
     }
 
     compileOptions {
