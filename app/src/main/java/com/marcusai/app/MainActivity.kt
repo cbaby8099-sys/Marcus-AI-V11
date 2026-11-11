@@ -75,14 +75,6 @@ private fun MarcusApp() {
     var chatMode by remember { mutableStateOf(true) }
     var history by remember { mutableStateOf(listOf<String>()) }
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
-    val configPrefs = remember { context.getSharedPreferences("marcus_config_v15", 0) }
-    var themeRefresh by remember { mutableIntStateOf(0) }
-    val selectedTheme = remember(themeRefresh) { configPrefs.getString("theme", "Eternal Darkness") ?: "Eternal Darkness" }
-    val (palette.background, palette.primary, palette.accent, palette.surface) = when (selectedTheme) {
-        "palette.primary Night" -> listOf(Color(0xFF100308), Color(0xFFFF1744), Color(0xFFFF8A80), Color(0xFF28101A))
-        "Obsidian Gold" -> listOf(Color(0xFF080808), Color(0xFFB58A32), Color(0xFFFFD978), Color(0xFF1D1A12))
-        else -> listOf(Color(0xFF070509), Color(0xFFB0002A), Color(0xFFD6A64B), Color(0xFF19131D))
-    }
 
     val recognizer = remember {
         if (SpeechRecognizer.isRecognitionAvailable(context)) {
@@ -120,7 +112,6 @@ private fun MarcusApp() {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
             }
             speech.cancel()
             listening = true
@@ -182,7 +173,7 @@ private fun MarcusApp() {
     )) {
         Box(
             Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Color(0xFF26000D), palette.background, Color(0xFF080D18)))
+                Brush.verticalGradient(listOf(palette.gradientEnd, palette.background, palette.surface))
             )
         ) {
             Column(
@@ -191,7 +182,7 @@ private fun MarcusApp() {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("MARCUS", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                        Text("THE DARK INTELLIGENCE  •  V18", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
+                        Text("THE DARK INTELLIGENCE  •  V16", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showAppManager = !showAppManager; showSettings = false }) { Text("APPS", color = palette.accent, fontSize = 12.sp) }
