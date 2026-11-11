@@ -369,6 +369,27 @@ private fun handleMarcusDeviceCommand(context: android.content.Context, raw: Str
         }
         return "${target.third} is not installed or Android did not expose its launch activity."
     }
+    val appPrefix = listOf("open ", "launch ", "start ").firstOrNull { command.startsWith(it) }
+    if (appPrefix != null) {
+        val requested = command.removePrefix(appPrefix).trim()
+        if (requested.isNotBlank()) {
+            val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            val matches = runCatching { context.packageManager.queryIntentActivities(launcherIntent, 0) }.getOrDefault(emptyList())
+            val app = matches.firstOrNull {
+                it.loadLabel(context.packageManager).toString().lowercase(Locale.US) == requested
+            } ?: matches.firstOrNull {
+                it.loadLabel(context.packageManager).toString().lowercase(Locale.US).contains(requested)
+            }
+            if (app != null) {
+                val launch = context.packageManager.getLaunchIntentForPackage(app.activityInfo.packageName)
+                if (launch != null) {
+                    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(launch)
+                    return "Opening ${app.loadLabel(context.packageManager)}."
+                }
+            }
+        }
+    }
     return when (command) {
         "open settings", "open phone settings", "launch settings" -> {
             context.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -417,6 +438,20 @@ private fun handleMarcusDeviceCommand(context: android.content.Context, raw: Str
                 "Opening Camera."
             } else "No camera app is available."
         }
+        "open phone", "open dialer", "open calls" -> launchDeviceIntent(context, Intent(Intent.ACTION_DIAL), "Phone dialer")
+        "open messages", "open sms" -> launchDeviceIntent(context, Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MESSAGING), "Messages")
+        "open maps", "open navigation" -> launchDeviceIntent(context, Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=")), "Maps")
+        "open clock", "open alarm" -> launchDeviceIntent(context, Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CLOCK), "Clock")
+        "open calendar" -> launchDeviceIntent(context, Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALENDAR), "Calendar")
         else -> null
     }
+}
+
+
+private fun launchDeviceIntent(context: android.content.Context, intent: Intent, label: String): String {
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    return if (intent.resolveActivity(context.packageManager) != null) {
+        runCatching { context.startActivity(intent) }
+            .fold({ "Opening $label." }, { "$label could not be opened on this device." })
+    } else "$label is not available on this device."
 }
