@@ -1,6 +1,10 @@
 package com.marcusai.app
 
+import android.Manifest
+import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
+import android.provider.Settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -11,7 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
-private val SettingsGold = Color(0xFFD6A64B)
+private val SettingsGold = Color(0xFF31C8F5)
 private val SettingsPanel = Color(0xFF19131D)
 
 @Composable
@@ -168,17 +172,39 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
             }, modifier = Modifier.fillMaxWidth()) { Text("TURN OFF FLOATING ROBOT") }
         }
 
-        SettingsSection("PHONE CONTROL") {
-            Text("Enable Marcus navigation", color = Color.White, style = MaterialTheme.typography.titleSmall)
-            Text("To let Marcus perform your spoken Home, Back and Recent Apps commands, Android requires you to enable its clearly disclosed accessibility service. Marcus does not silently take over the phone or read screen contents.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+        SettingsSection("PERMISSION CENTRE  •  V50") {
+            var refreshKey by remember { mutableIntStateOf(0) }
+            val micGranted = remember(refreshKey) {
+                androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            }
+            val overlayGranted = remember(refreshKey) { Settings.canDrawOverlays(context) }
+            val accessibilityGranted = remember(refreshKey) {
+                val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+                val component = ComponentName(context, MarcusAccessibilityService::class.java).flattenToString()
+                enabled.split(':').any { it.equals(component, ignoreCase = true) }
+            }
+            val notificationsGranted = remember(refreshKey) {
+                android.os.Build.VERSION.SDK_INT < 33 ||
+                    androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            }
+            Text("Phone control works without the floating overlay. Accessibility is the key permission for supported navigation and screen reading.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            PermissionStatusRow("Accessibility • phone navigation", accessibilityGranted)
+            PermissionStatusRow("Microphone • voice commands", micGranted)
+            PermissionStatusRow("Overlay • floating robot only", overlayGranted)
+            PermissionStatusRow("Notifications • status alerts", notificationsGranted)
+            OutlinedButton(onClick = { refreshKey++ }, modifier = Modifier.fillMaxWidth()) { Text("REFRESH PERMISSION STATUS") }
             Button(onClick = {
-                context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                runCatching { context.startActivity(android.content.Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
             }, modifier = Modifier.fillMaxWidth()) { Text("OPEN ACCESSIBILITY SETTINGS") }
-            Text("Supported direct commands: open supported installed apps; open Android, Wi-Fi, Bluetooth, Display or Sound settings; go Home; go Back; show Recent Apps; open Notifications and Quick Settings. Actions depend on Android permission and device support.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = {
+                runCatching { context.startActivity(android.content.Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            }, modifier = Modifier.fillMaxWidth()) { Text("OPEN MARCUS APP INFO") }
+            Text("If Android shows 'Allow restricted settings', you must approve it manually from App info when that option is available. Marcus cannot switch this protection off, grant itself access, or bypass Play Protect.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Text("Overlay is optional: it is only required for the floating robot bubble. App launching and supported settings shortcuts do not need overlay access. Home, Back, Recents and screen reading require Marcus Control to be enabled in Accessibility.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
         SettingsSection("APP & SECURITY") {
-            Text("Marcus V19 • Android edition", color = Color.White)
+            Text("Marcus V50 • Android edition", color = Color.White)
             Text("Never store API keys, passwords, broker credentials or recovery codes in chat history. Phone-control features require Android permissions and explicit confirmation.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
