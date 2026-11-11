@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
@@ -59,10 +60,6 @@ class MarcusFloatingService : Service() {
             background = rounded(Color.rgb(7, 15, 29), Color.rgb(0, 205, 255), 100f, 3)
             elevation = 12f
             contentDescription = "Marcus floating robot. Tap to open voice assistant."
-            setOnClickListener {
-                showPanel()
-                openMarcusVoice()
-            }
         }
         bubble = view
         val params = WindowManager.LayoutParams(
@@ -76,6 +73,40 @@ class MarcusFloatingService : Service() {
             x = dp(12)
             y = 0
         }
+        var downX = 0f
+        var downY = 0f
+        var startX = 0
+        var startY = 0
+        var moved = false
+        view.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = event.rawX
+                    downY = event.rawY
+                    startX = params.x
+                    startY = params.y
+                    moved = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = (event.rawX - downX).toInt()
+                    val dy = (event.rawY - downY).toInt()
+                    if (kotlin.math.abs(dx) + kotlin.math.abs(dy) > dp(8)) moved = true
+                    params.x = (startX - dx).coerceAtLeast(0)
+                    params.y = startY + dy
+                    runCatching { windowManager.updateViewLayout(view, params) }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!moved) {
+                        showPanel()
+                        openMarcusVoice()
+                    }
+                    true
+                }
+                else -> true
+            }
+        }
         runCatching { windowManager.addView(view, params) }
     }
 
@@ -84,6 +115,7 @@ class MarcusFloatingService : Service() {
             panel?.visibility = android.view.View.VISIBLE
             return
         }
+        var panelView: LinearLayout? = null
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(14), dp(16), dp(14))
@@ -104,7 +136,8 @@ class MarcusFloatingService : Service() {
         })
         root.addView(actionButton("VOICE  •  OPEN MARCUS") { openMarcusVoice() })
         root.addView(actionButton("OPEN CHAT") { openMarcusChat() })
-        root.addView(actionButton("HIDE PANEL") { root.visibility = android.view.View.GONE })
+        root.addView(actionButton("HIDE PANEL") { panelView?.visibility = android.view.View.GONE })
+        panelView = root
         panel = root
         val params = WindowManager.LayoutParams(
             dp(260), WindowManager.LayoutParams.WRAP_CONTENT,
