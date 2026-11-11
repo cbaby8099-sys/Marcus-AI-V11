@@ -75,7 +75,13 @@ private fun MarcusApp() {
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
 
     val recognizer = remember {
-        if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
+        if (SpeechRecognizer.isRecognitionAvailable(context)) {
+            if (android.os.Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
+                SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+            } else {
+                SpeechRecognizer.createSpeechRecognizer(context)
+            }
+        } else null
     }
 
     DisposableEffect(Unit) {
@@ -145,7 +151,7 @@ private fun MarcusApp() {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("MARCUS", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                        Text("THE DARK INTELLIGENCE  •  V16", color = Crimson, fontSize = 10.sp, letterSpacing = 1.5.sp)
+                        Text("THE DARK INTELLIGENCE  •  V17", color = Crimson, fontSize = 10.sp, letterSpacing = 1.5.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showAppManager = !showAppManager; showSettings = false }) { Text("APPS", color = MutedGold, fontSize = 12.sp) }
