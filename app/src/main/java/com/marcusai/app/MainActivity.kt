@@ -279,7 +279,7 @@ private fun sendMessage(
     if (text.isBlank()) return
     val deviceResult = handleMarcusDeviceCommand(context, text)
     if (deviceResult != null) {
-        updateHistory(history + "YOU: $text" + "MARCUS: $deviceResult")
+        updateHistory(history + listOf("YOU: $text", "MARCUS: $deviceResult"))
         updateAnswer(deviceResult)
         tts?.speak(deviceResult, TextToSpeech.QUEUE_FLUSH, null, "marcus_device_action")
         return
@@ -380,6 +380,21 @@ private fun handleMarcusDeviceCommand(context: android.content.Context, raw: Str
         "show recent apps", "open recent apps" -> {
             if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS)) "Showing recent apps."
             else "Phone navigation is not enabled yet. Enable Marcus Control in Android Settings > Accessibility > Installed apps."
+        }
+        "show notifications", "open notifications" -> {
+            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)) "Opening notifications."
+            else "Enable Marcus Control in Android Settings > Accessibility > Installed apps first."
+        }
+        "open quick settings", "show quick settings" -> {
+            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS)) "Opening Quick Settings."
+            else "Enable Marcus Control in Android Settings > Accessibility > Installed apps first."
+        }
+        "open camera", "launch camera" -> {
+            val camera = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (camera.resolveActivity(context.packageManager) != null) {
+                context.startActivity(camera)
+                "Opening Camera."
+            } else "No camera app is available."
         }
         else -> null
     }
