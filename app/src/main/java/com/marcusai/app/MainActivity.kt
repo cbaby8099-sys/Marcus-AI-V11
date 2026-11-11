@@ -101,18 +101,41 @@ private fun MarcusApp() {
         }
     }
 
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
+    fun startMarcusListening() {
+        val speech = recognizer
+        if (speech == null) {
+            listening = false
+            answer = "Speech recognition is unavailable. Install or enable a speech recognition provider in Android settings."
+            return
+        }
+        try {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             }
+            speech.cancel()
             listening = true
-            recognizer?.startListening(intent)
-        } else {
-            answer = "Microphone permission was not granted."
+            speech.startListening(intent)
+        } catch (e: Exception) {
+            listening = false
+            answer = "Could not start microphone: ${e.message ?: "recognition service error"}"
         }
+    }
+
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startMarcusListening()
+        else {
+            listening = false
+            answer = "Microphone permission is off. Allow it in Android App info > Permissions > Microphone."
+        }
+    }
+
+    fun requestMarcusMic() {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (granted) startMarcusListening() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
     }
 
     DisposableEffect(recognizer) {
@@ -122,11 +145,22 @@ private fun MarcusApp() {
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() { listening = false }
-            override fun onError(error: Int) { listening = false; answer = "Voice recognition stopped. Try again." }
+            override fun onError(error: Int) {
+                listening = false
+                answer = when (error) {
+                    SpeechRecognizer.ERROR_AUDIO -> "Microphone audio error. Check that another app is not using the microphone."
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is missing. Enable it in Android App info."
+                    SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech provider network error. Check your connection or enable an offline speech pack."
+                    SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "I didn't catch that. Tap the microphone and speak again."
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Microphone is busy. Wait a moment and try again."
+                    SpeechRecognizer.ERROR_CLIENT -> "Speech session stopped. Tap the microphone to start a fresh session."
+                    else -> "Speech recognition error ($error). Try again."
+                }
+            }
             override fun onResults(results: Bundle?) {
                 listening = false
                 val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                if (!spoken.isNullOrBlank()) sendMessage(spoken, userId, history, { history = it }, { answer = it }, { busy = it }, scope, tts)
+                if (!spoken.isNullOrBlank()) sendMessage(spoken, userId, history, { history = it }, { answer = it }, { busy = it }, scope, tts, context)
             }
             override fun onPartialResults(partialResults: Bundle?) {}
             override fun onEvent(eventType: Int, params: Bundle?) {}
@@ -191,16 +225,7 @@ private fun MarcusApp() {
                         Text(answer, color = Color.White, modifier = Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(16.dp)).padding(16.dp))
                         Spacer(Modifier.height(12.dp))
                         Button(onClick = {
-                            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                            if (granted) {
-                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US)
-                                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                                }
-                                listening = true
-                                recognizer?.startListening(intent)
-                            } else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                                            requestMarcusMic()
                         }, Modifier.fillMaxWidth()) { Text(if (listening) "LISTENING…" else "SPEAK TO MARCUS") }
                         OutlinedButton(onClick = { tts?.stop() }, Modifier.fillMaxWidth()) { Text("STOP VOICE") }
                     }
@@ -219,21 +244,12 @@ private fun MarcusApp() {
                     OutlinedTextField(value = message, onValueChange = { message = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Message Marcus…") }, maxLines = 4)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         IconButton(onClick = {
-                            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                            if (granted) {
-                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US)
-                                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                                }
-                                listening = true
-                                recognizer?.startListening(intent)
-                            } else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                            requestMarcusMic()
                         }) { Text("🎙", color = MutedGold) }
                         Button(onClick = {
                             val outgoing = message
                             if (outgoing.isNotBlank()) {
-                                sendMessage(outgoing, userId, history, { history = it }, { answer = it }, { busy = it }, scope, tts)
+                                sendMessage(outgoing, userId, history, { history = it }, { answer = it }, { busy = it }, scope, tts, context)
                                 message = ""
                             }
                         }, Modifier.weight(1f), enabled = !busy && message.isNotBlank()) { Text(if (busy) "SENDING…" else "SEND") }
@@ -253,13 +269,21 @@ private fun sendMessage(
     updateAnswer: (String) -> Unit,
     updateBusy: (Boolean) -> Unit,
     scope: kotlinx.coroutines.CoroutineScope,
-    tts: TextToSpeech?
+    tts: TextToSpeech?,
+    context: android.content.Context
 ) {
     if (userId.isBlank()) {
         updateAnswer("Open Settings and enter your Marcus user ID first.")
         return
     }
     if (text.isBlank()) return
+    val deviceResult = handleMarcusDeviceCommand(context, text)
+    if (deviceResult != null) {
+        updateHistory(history + "YOU: $text" + "MARCUS: $deviceResult")
+        updateAnswer(deviceResult)
+        tts?.speak(deviceResult, TextToSpeech.QUEUE_FLUSH, null, "marcus_device_action")
+        return
+    }
     val updated = history + "YOU: $text"
     updateHistory(updated)
     updateBusy(true)
@@ -299,5 +323,64 @@ private fun sendMessage(
         updateHistory(updated + "MARCUS: $response")
         tts?.speak(response, TextToSpeech.QUEUE_FLUSH, null, "marcus_reply")
         updateBusy(false)
+    }
+}
+
+
+private fun handleMarcusDeviceCommand(context: android.content.Context, raw: String): String? {
+    val command = raw.lowercase(Locale.US).trim().replace(Regex("[.!?]+$"), "")
+    val packageTargets = listOf(
+        Triple("whatsapp", "com.whatsapp", "WhatsApp"),
+        Triple("tiktok", "com.zhiliaoapp.musically", "TikTok"),
+        Triple("chrome", "com.android.chrome", "Chrome"),
+        Triple("youtube", "com.google.android.youtube", "YouTube"),
+        Triple("play store", "com.android.vending", "Google Play Store"),
+        Triple("metatrader 5", "net.metaquotes.metatrader5", "MetaTrader 5"),
+        Triple("mt5", "net.metaquotes.metatrader5", "MetaTrader 5")
+    )
+    val target = packageTargets.firstOrNull { command == "open ${it.first}" || command == "launch ${it.first}" || command == "start ${it.first}" }
+    if (target != null) {
+        val launch = context.packageManager.getLaunchIntentForPackage(target.second)
+        if (launch != null) {
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(launch)
+            return "Opening ${target.third}."
+        }
+        return "${target.third} is not installed or Android did not expose its launch activity."
+    }
+    return when (command) {
+        "open settings", "open phone settings", "launch settings" -> {
+            context.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            "Opening Android Settings."
+        }
+        "open wi-fi settings", "open wifi settings", "open wi fi settings" -> {
+            context.startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            "Opening Wi-Fi settings."
+        }
+        "open bluetooth settings" -> {
+            context.startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            "Opening Bluetooth settings."
+        }
+        "open display settings" -> {
+            context.startActivity(Intent(android.provider.Settings.ACTION_DISPLAY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            "Opening display settings."
+        }
+        "open sound settings" -> {
+            context.startActivity(Intent(android.provider.Settings.ACTION_SOUND_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            "Opening sound settings."
+        }
+        "go home", "press home", "show home screen" -> {
+            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)) "Going to the Home screen."
+            else "Phone navigation is not enabled yet. Open Android Settings > Accessibility > Installed apps > Marcus Control, then enable it."
+        }
+        "go back", "press back" -> {
+            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)) "Going back."
+            else "Phone navigation is not enabled yet. Enable Marcus Control in Android Settings > Accessibility > Installed apps."
+        }
+        "show recent apps", "open recent apps" -> {
+            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS)) "Showing recent apps."
+            else "Phone navigation is not enabled yet. Enable Marcus Control in Android Settings > Accessibility > Installed apps."
+        }
+        else -> null
     }
 }
