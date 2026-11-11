@@ -393,6 +393,19 @@ private fun handleMarcusDeviceCommand(context: android.content.Context, raw: Str
             }
         }
     }
+    val typedText = when {
+        command.startsWith("type ") -> raw.trim().substringAfter(" ", "")
+        command.startsWith("enter text ") -> raw.trim().substringAfter("enter text ", "")
+        else -> null
+    }
+    if (typedText != null) {
+        if (typedText.isBlank()) return "Tell me what text to type, then select an editable field in the app."
+        return if (MarcusAccessibilityService.typeTextIntoFocusedField(typedText)) {
+            "Typed the text into the focused field. I have not pressed Send or submitted the form."
+        } else {
+            "I couldn't type there. Enable Marcus Control in Accessibility, tap an editable text field first, and make sure it isn't a password field."
+        }
+    }
     return when (command) {
         "what's on my screen", "whats on my screen", "read my screen", "describe my screen" -> {
             val visible = MarcusAccessibilityService.readVisibleScreen()
