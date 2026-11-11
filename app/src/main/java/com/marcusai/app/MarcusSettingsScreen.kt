@@ -15,7 +15,7 @@ private val SettingsGold = Color(0xFFD6A64B)
 private val SettingsPanel = Color(0xFF19131D)
 
 @Composable
-fun MarcusSettingsScreen(onClose: () -> Unit) {
+fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClose: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("marcus_config_v15", Context.MODE_PRIVATE) }
 
@@ -35,6 +35,7 @@ fun MarcusSettingsScreen(onClose: () -> Unit) {
     var tradingEducation by remember { mutableStateOf(prefs.getBoolean("trading_education", true)) }
     var theme by remember { mutableStateOf(prefs.getString("theme", "Eternal Darkness") ?: "Eternal Darkness") }
     var saved by remember { mutableStateOf(false) }
+    var idDraft by remember(userId) { mutableStateOf(userId) }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),
@@ -42,6 +43,23 @@ fun MarcusSettingsScreen(onClose: () -> Unit) {
     ) {
         Text("MARCUS CONFIGURATION", color = SettingsGold, style = MaterialTheme.typography.titleLarge)
         Text("Personalise the assistant, voice, privacy and interface.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+
+        SettingsSection("MARCUS IDENTITY") {
+            Text("Your automatically generated Marcus ID", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(idDraft, { idDraft = it }, Modifier.fillMaxWidth(), label = { Text("Marcus User ID") }, singleLine = true)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Marcus ID", userId))
+                    saved = true
+                }, modifier = Modifier.weight(1f)) { Text("COPY CURRENT ID") }
+                OutlinedButton(onClick = {
+                    val value = idDraft.trim()
+                    if (value.length >= 8) { onUserIdChange(value); saved = true }
+                }, modifier = Modifier.weight(1f)) { Text("RESTORE / SAVE ID") }
+            }
+            Text("Keep this ID safe. It identifies your Marcus account on the connected backend. A manually entered ID must already exist there to restore its cloud history.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+        }
 
         SettingsSection("IDENTITY & PERSONALITY") {
             OutlinedTextField(assistantName, { assistantName = it }, Modifier.fillMaxWidth(), label = { Text("Assistant name") }, singleLine = true)
@@ -55,7 +73,7 @@ fun MarcusSettingsScreen(onClose: () -> Unit) {
             SettingsToggle("Read replies aloud automatically", autoSpeak) { autoSpeak = it }
             Text("Speech rate: ${"%.2f".format(speechRate)}×", color = Color.White)
             Slider(value = speechRate, onValueChange = { speechRate = it }, valueRange = 0.70f..1.20f, enabled = voiceEnabled)
-            Text("Uses Android speech recognition and text-to-speech. A separate voice model is not included.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Text("Marcus uses one in-app microphone interface for voice input across chat and voice mode. Android supplies the speech recognition engine; an on-device engine is used only when available. The recognizer may depend on Google's or another installed recognition provider, but Marcus does not need to open its separate microphone screen.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
         SettingsSection("MEMORY & PRIVACY") {
