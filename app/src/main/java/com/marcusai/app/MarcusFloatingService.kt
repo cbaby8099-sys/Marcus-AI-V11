@@ -52,7 +52,7 @@ class MarcusFloatingService : Service() {
 
     private fun showBubble() {
         val view = TextView(this).apply {
-            text = "M"
+            text = getSharedPreferences("marcus_config_v15", MODE_PRIVATE).getString("robot_face", "🤖") ?: "🤖"
             textSize = 25f
             gravity = Gravity.CENTER
             typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
