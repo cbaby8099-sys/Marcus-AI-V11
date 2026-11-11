@@ -236,6 +236,14 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
 }
 
 @Composable
+private fun PermissionStatusRow(label: String, enabled: Boolean) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = Color.White, modifier = Modifier.weight(1f))
+        Text(if (enabled) "ENABLED ✓" else "OFF", color = if (enabled) Color(0xFF66D9A5) else Color(0xFFFFB36B), style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+@Composable
 private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = SettingsPanel)) {
         Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
