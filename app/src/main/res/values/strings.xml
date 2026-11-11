@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="marcus_accessibility_description">Allows Marcus to perform only user-requested Home, Back and Recent Apps navigation. It does not read screen contents or tap controls.</string>
+    <string name="marcus_accessibility_description">Allows Marcus to perform user-requested Android navigation and open system panels. It does not read screen contents or tap controls.</string>
 </resources>
