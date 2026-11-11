@@ -46,12 +46,12 @@ private val Panel = Color(0xFF19131D)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MarcusApp() }
+        setContent { MarcusApp(startVoice = intent?.getBooleanExtra(MarcusFloatingService.EXTRA_START_VOICE, false) == true) }
     }
 }
 
 @Composable
-private fun MarcusApp() {
+private fun MarcusApp(startVoice: Boolean = false) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("marcus_user", 0) }
@@ -134,6 +134,13 @@ private fun MarcusApp() {
         if (granted) startMarcusListening() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
     }
 
+    LaunchedEffect(startVoice) {
+        if (startVoice) {
+            chatMode = false
+            android.os.Handler(context.mainLooper).postDelayed({ requestMarcusMic() }, 450L)
+        }
+    }
+
     DisposableEffect(recognizer) {
         recognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) { listening = true }
@@ -184,7 +191,7 @@ private fun MarcusApp() {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("MARCUS", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                        Text("THE DARK INTELLIGENCE  •  V16", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
+                        Text("ROBOTIC CORE  •  V19", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showAppManager = !showAppManager; showSettings = false }) { Text("APPS", color = palette.accent, fontSize = 12.sp) }
@@ -277,6 +284,20 @@ private fun sendMessage(
         return
     }
     if (text.isBlank()) return
+    val command = text.trim().lowercase(Locale.US).replace(Regex("[.!?]+$"), "")
+    if (command == "clear chat" || command == "clear conversation" || command == "marcus clear chat") {
+        android.app.AlertDialog.Builder(context)
+            .setTitle("Clear Marcus chat?")
+            .setMessage("This clears the conversation shown in this app on this device. It does not erase any separate cloud records.")
+            .setNegativeButton("CANCEL", null)
+            .setPositiveButton("CLEAR CHAT") { _, _ ->
+                updateHistory(emptyList())
+                updateAnswer("Conversation cleared. Ready for a fresh start.")
+                updateBusy(false)
+            }
+            .show()
+        return
+    }
     val deviceResult = handleMarcusDeviceCommand(context, text)
     if (deviceResult != null) {
         updateHistory(history + listOf("YOU: $text", "MARCUS: $deviceResult"))
