@@ -77,8 +77,8 @@ private fun MarcusApp() {
         }
         tts = engine
         engine.language = Locale.US
-        engine.setPitch(0.82f)
-        engine.setSpeechRate(0.9f)
+        engine.setPitch(0.78f)
+        engine.setSpeechRate(context.getSharedPreferences("marcus_config_v15", 0).getFloat("speech_rate", 0.90f).coerceIn(0.70f, 1.20f))
         onDispose {
             engine.stop()
             engine.shutdown()
@@ -136,7 +136,7 @@ private fun MarcusApp() {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("MARCUS", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                        Text("THE DARK INTELLIGENCE  •  V15", color = Crimson, fontSize = 10.sp, letterSpacing = 1.5.sp)
+                        Text("THE DARK INTELLIGENCE  •  V16", color = Crimson, fontSize = 10.sp, letterSpacing = 1.5.sp)
                     }
                     TextButton(onClick = { showSettings = !showSettings }) { Text("⚙", color = MutedGold, fontSize = 22.sp) }
                 }
@@ -208,7 +208,7 @@ private fun MarcusApp() {
                         Button(onClick = {
                             val outgoing = message
                             if (outgoing.isNotBlank()) {
-                                sendMessage(outgoing, userId, history, { history = it }, { answer = it; tts?.speak(it, TextToSpeech.QUEUE_FLUSH, null, "marcus_reply") }, { busy = it }, scope, tts)
+                                sendMessage(outgoing, userId, history, { history = it }, { answer = it }, { busy = it }, scope, tts)
                                 message = ""
                             }
                         }, Modifier.weight(1f), enabled = !busy && message.isNotBlank()) { Text(if (busy) "SENDING…" else "SEND") }
@@ -245,12 +245,15 @@ private fun sendMessage(
                     put("action", "chat")
                     put("userId", userId)
                     put("message", text)
-                    put("history", JSONArray(updated))
+                    put("history", JSONArray(updated.takeLast(12)))
+                    put("responseMode", "fast")
+                    put("maxOutputTokens", 700)
+                    put("systemPrompt", "You are Marcus, a capable, accurate and direct assistant with a dark, cinematic fictional persona. Be concise by default, answer the actual request first, use clear steps when needed, avoid filler, and ask only essential clarifying questions. Be honest about tool access and uncertainty. Never claim an action succeeded unless verified.")
                 }
                 val connection = (URL(WORKER_URL).openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
-                    connectTimeout = 15000
-                    readTimeout = 30000
+                    connectTimeout = 8000
+                    readTimeout = 20000
                     doOutput = true
                     setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 }
