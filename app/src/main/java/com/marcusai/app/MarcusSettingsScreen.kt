@@ -76,11 +76,12 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
         }
 
         SettingsSection("VOICE & SPEECH") {
+            OutlinedButton(onClick = { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}"))) }, modifier = Modifier.fillMaxWidth()) { Text("OPEN MARCUS APP PERMISSIONS") }
             SettingsToggle("Voice features enabled", voiceEnabled) { voiceEnabled = it }
             SettingsToggle("Read replies aloud automatically", autoSpeak) { autoSpeak = it }
             Text("Speech rate: ${"%.2f".format(speechRate)}×", color = Color.White)
             Slider(value = speechRate, onValueChange = { speechRate = it }, valueRange = 0.70f..1.20f, enabled = voiceEnabled)
-            Text("Marcus uses one in-app microphone interface for voice input across chat and voice mode. Android supplies the speech recognition engine; an on-device engine is used only when available. The recognizer may depend on Google's or another installed recognition provider, but Marcus does not need to open its separate microphone screen.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Text("Marcus uses Android speech recognition through the in-app microphone. If listening fails, check App info > Permissions > Microphone, make sure a speech recognition provider is installed and enabled, and close other apps currently using the microphone. Voice recognition may require internet unless an offline language pack is installed.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
         SettingsSection("MEMORY & PRIVACY") {
@@ -99,20 +100,20 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
         }
 
         SettingsSection("APPEARANCE") {
-            SettingsChoice("Theme", theme, listOf("Eternal Darkness", "Crimson Night", "Obsidian Gold")) { theme = it }
+            SettingsChoice("Theme", theme, listOf("Eternal Darkness", "Crimson Night", "Obsidian Gold", "Demonic Violet", "Abyss Blue", "Toxic Green")) { theme = it }
         }
 
         SettingsSection("PHONE CONTROL") {
             Text("Enable Marcus navigation", color = Color.White, style = MaterialTheme.typography.titleSmall)
-            Text("To let Marcus perform your spoken Home, Back and Recent Apps commands, Android requires you to enable its clearly disclosed accessibility service. Marcus does not read screen contents or tap arbitrary controls.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Text("To let Marcus perform your spoken Home, Back and Recent Apps commands, Android requires you to enable its clearly disclosed accessibility service. Marcus does not silently take over the phone or read screen contents.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
             Button(onClick = {
                 context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
             }, modifier = Modifier.fillMaxWidth()) { Text("OPEN ACCESSIBILITY SETTINGS") }
-            Text("Supported direct commands: open WhatsApp, TikTok, Chrome, YouTube, Play Store, MT5; open Settings, Wi-Fi, Bluetooth, Display or Sound settings; go Home; go Back; show Recent Apps.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Text("Supported direct commands: open supported installed apps; open Android, Wi-Fi, Bluetooth, Display or Sound settings; go Home; go Back; show Recent Apps; open Notifications and Quick Settings. Actions depend on Android permission and device support.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
         SettingsSection("APP & SECURITY") {
-            Text("Marcus V17 • Android edition", color = Color.White)
+            Text("Marcus V16 • Android edition", color = Color.White)
             Text("Never store API keys, passwords, broker credentials or recovery codes in chat history. Phone-control features require Android permissions and explicit confirmation.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
