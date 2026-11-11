@@ -405,6 +405,21 @@ private fun handleMarcusDeviceCommand(context: android.content.Context, raw: Str
                 "Opening Camera."
             } else "No camera app is available."
         }
+        "open dialer", "open phone" -> {
+            runCatching {
+                context.startActivity(Intent(Intent.ACTION_DIAL).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }.fold({ "Opening the phone dialer." }, { "Could not open the phone dialer on this device." })
+        }
+        "open contacts" -> {
+            runCatching {
+                context.startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CONTACTS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }.fold({ "Opening Contacts." }, { "No Contacts app is available." })
+        }
+        "open messages", "open sms" -> {
+            runCatching {
+                context.startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MESSAGING).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }.fold({ "Opening Messages." }, { "No Messages app is available." })
+        }
         else -> null
     }
 }
