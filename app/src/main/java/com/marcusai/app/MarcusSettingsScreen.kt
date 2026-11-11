@@ -80,7 +80,12 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
             SettingsToggle("Read replies aloud automatically", autoSpeak) { autoSpeak = it }
             Text("Speech rate: ${"%.2f".format(speechRate)}×", color = Color.White)
             Slider(value = speechRate, onValueChange = { speechRate = it }, valueRange = 0.70f..1.20f, enabled = voiceEnabled)
-            Text("Marcus uses one in-app microphone interface for voice input across chat and voice mode. Android supplies the speech recognition engine; an on-device engine is used only when available. The recognizer may depend on Google's or another installed recognition provider, but Marcus does not need to open its separate microphone screen.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Text("Marcus uses one in-app microphone for both Chat and Voice. Android supplies speech recognition; online recognition is allowed when an offline speech pack is unavailable. If listening fails, check microphone permission and the phone's speech-recognition provider.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = {
+                val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    android.net.Uri.parse("package:" + context.packageName))
+                context.startActivity(intent)
+            }, modifier = Modifier.fillMaxWidth()) { Text("OPEN MARCUS APP PERMISSIONS") }
         }
 
         SettingsSection("MEMORY & PRIVACY") {
@@ -108,11 +113,11 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
             Button(onClick = {
                 context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
             }, modifier = Modifier.fillMaxWidth()) { Text("OPEN ACCESSIBILITY SETTINGS") }
-            Text("Supported direct commands: open WhatsApp, TikTok, Chrome, YouTube, Play Store, MT5; open Settings, Wi-Fi, Bluetooth, Display or Sound settings; go Home; go Back; show Recent Apps.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Text("Supported commands include opening installed apps and Android settings, opening Dialer, Contacts and Messages, going Home or Back, and showing Recent Apps, Notifications and Quick Settings. Some actions require Marcus Control to be enabled in Android Accessibility settings.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
         SettingsSection("APP & SECURITY") {
-            Text("Marcus V17 • Android edition", color = Color.White)
+            Text("Marcus V18 • Android edition", color = Color.White)
             Text("Never store API keys, passwords, broker credentials or recovery codes in chat history. Phone-control features require Android permissions and explicit confirmation.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
