@@ -4,42 +4,50 @@ name: Build Marcus AI APK
 on:
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches:
+      - main
+      - v12-premium-voice
+      - v13-max-demon
+      - v15-eternal-darkness
+      - v16-mic-control-themes
+      - v19-robot-companion
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out source
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: 17
 
-      - name: Set up Gradle
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.11.1"
+          gradle-version: 8.11.1
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools'
+          packages: ''
 
-      - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Install required SDK components
+        run: |
+          sdkmanager "platform-tools"
+          sdkmanager "platforms;android-35"
+          sdkmanager "build-tools;35.0.0"
 
-      - name: Build debug APK
+      - name: Build Marcus V19
         run: gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: marcus-ai-v11-debug
+          name: marcus-ai-v19-robot-companion
           path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
           
