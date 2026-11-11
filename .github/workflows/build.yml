@@ -10,6 +10,7 @@ on:
       - v13-max-demon
       - v15-eternal-darkness
       - v16-mic-control-themes
+      - v19-robot-companion
 
 jobs:
   build:
@@ -41,12 +42,12 @@ jobs:
           sdkmanager "platforms;android-35"
           sdkmanager "build-tools;35.0.0"
 
-      - name: Build Marcus V16
+      - name: Build Marcus V19
         run: gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: marcus-ai-v16-eternal-darkness
+          name: marcus-ai-v19-robot-companion
           path: app/build/outputs/apk/debug/app-debug.apk
           
