@@ -13,8 +13,8 @@ android {
         applicationId = "com.marcusai.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "11.0"
+        versionCode = 15
+        versionName = "15.0"
     }
 
     compileOptions {
