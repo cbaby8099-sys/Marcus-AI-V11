@@ -65,7 +65,6 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
                 }
                 context.startActivity(android.content.Intent.createChooser(share, "Share Marcus ID"))
             }, modifier = Modifier.fillMaxWidth()) { Text("SHARE MARCUS ID") }
-            }
             Text("Keep this ID safe. It identifies your Marcus account on the connected backend. A manually entered ID must already exist there to restore its cloud history.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
