@@ -184,7 +184,7 @@ private fun MarcusApp() {
     )) {
         Box(
             Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Color(0xFF26000D), VoidBlack, Color(0xFF080D18)))
+                Brush.verticalGradient(listOf(Crimson.copy(alpha = 0.28f), VoidBlack, Panel))
             )
         ) {
             Column(
@@ -220,7 +220,17 @@ private fun MarcusApp() {
                     FilterChip(selected = chatMode, onClick = { chatMode = true }, label = { Text("CHAT") })
                     FilterChip(selected = !chatMode, onClick = { chatMode = false }, label = { Text("VOICE") })
                     Spacer(Modifier.weight(1f))
-                    Text(if (busy) "THINKING…" else if (listening) "LISTENING…" else "ONLINE UI", color = MutedGold, fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterVertically))
+                    Text(if (busy) "THINKING…" else if (listening) "LISTENING…" else "READY", color = MutedGold, fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterVertically))
+                }
+
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("WHATSAPP" to "open whatsapp", "HOME" to "go home", "SETTINGS" to "open settings", "CAMERA" to "open camera").forEach { (label, command) ->
+                        OutlinedButton(
+                            onClick = { sendMessage(command, userId, history, { history = it }, { answer = it }, { busy = it }, scope, tts, context) },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                        ) { Text(label, fontSize = 9.sp, maxLines = 1) }
+                    }
                 }
 
                 if (!chatMode) {
@@ -264,7 +274,7 @@ private fun MarcusApp() {
                         }, Modifier.weight(1f), enabled = !busy && message.isNotBlank()) { Text(if (busy) "SENDING…" else "SEND") }
                     }
                 }
-                Text("PERSONAL EDITION  •  LOCAL SETTINGS", color = Color.Gray, fontSize = 9.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 6.dp, bottom = 2.dp))
+                Text("MARCUS V18  •  DEVICE ACTIONS REQUIRE PERMISSION", color = Color.Gray, fontSize = 9.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 6.dp, bottom = 2.dp))
             }
         }
     }
