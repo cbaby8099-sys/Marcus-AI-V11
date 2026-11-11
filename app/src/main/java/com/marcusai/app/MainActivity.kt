@@ -51,12 +51,12 @@ private val Panel = Color(0xFF121C28)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MarcusApp(startVoice = intent?.getBooleanExtra(MarcusFloatingService.EXTRA_START_VOICE, false) == true) }
+        setContent { MarcusApp() }
     }
 }
 
 @Composable
-private fun MarcusApp(startVoice: Boolean = false) {
+private fun MarcusApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("marcus_user", 0) }
