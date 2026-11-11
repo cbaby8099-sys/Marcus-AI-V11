@@ -1,6 +1,7 @@
 package com.marcusai.app
 
 import android.accessibilityservice.AccessibilityService
+import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
@@ -17,6 +18,20 @@ class MarcusAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         if (instance === this) instance = null
         super.onDestroy()
+    }
+
+    private fun typeIntoFocusedField(value: String): Boolean {
+        if (value.isBlank() || value.length > 2000) return false
+        val root = runCatching { rootInActiveWindow }.getOrNull() ?: return false
+        val focused = runCatching { root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()
+            ?: return false
+        if (!focused.isEditable || focused.isPassword) return false
+        val args = Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value)
+        }
+        return runCatching {
+            focused.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        }.getOrDefault(false)
     }
 
     private fun collectVisibleText(): String {
@@ -42,6 +57,11 @@ class MarcusAccessibilityService : AccessibilityService() {
         fun perform(action: Int): Boolean {
             val service = instance ?: return false
             return runCatching { service.performGlobalAction(action) }.getOrDefault(false)
+        }
+
+        fun typeTextIntoFocusedField(value: String): Boolean {
+            val service = instance ?: return false
+            return runCatching { service.typeIntoFocusedField(value) }.getOrDefault(false)
         }
 
         fun readVisibleScreen(): String {
