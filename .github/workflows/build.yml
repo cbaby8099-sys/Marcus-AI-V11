@@ -8,6 +8,7 @@ on:
       - main
       - v12-premium-voice
       - v13-max-demon
+      - v15-eternal-darkness
 
 jobs:
   build:
@@ -39,12 +40,12 @@ jobs:
           sdkmanager "platforms;android-35"
           sdkmanager "build-tools;35.0.0"
 
-      - name: Build Marcus V13
+      - name: Build Marcus V15
         run: gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: marcus-ai-v13-max
+          name: marcus-ai-v15-eternal-darkness
           path: app/build/outputs/apk/debug/app-debug.apk
           
