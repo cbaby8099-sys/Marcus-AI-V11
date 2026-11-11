@@ -35,6 +35,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.util.UUID
 
 private const val WORKER_URL = "https://marcus-ai.cbaby8099.workers.dev"
 private val VoidBlack = Color(0xFF070509)
@@ -54,13 +55,21 @@ private fun MarcusApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("marcus_user", 0) }
-    var userId by remember { mutableStateOf(prefs.getString("userId", "") ?: "") }
+    var userId by remember {
+        mutableStateOf(
+            prefs.getString("userId", null)?.takeIf { it.isNotBlank() }
+                ?: ("MRC-" + UUID.randomUUID().toString().uppercase(Locale.US).replace("-", "").take(20)).also {
+                    prefs.edit().putString("userId", it).apply()
+                }
+        )
+    }
     var idDraft by remember { mutableStateOf(userId) }
     var message by remember { mutableStateOf("") }
     var answer by remember { mutableStateOf("I HAVE AWAKENED. SPEAK.") }
     var busy by remember { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showAppManager by remember { mutableStateOf(false) }
     var chatMode by remember { mutableStateOf(true) }
     var history by remember { mutableStateOf(listOf<String>()) }
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
@@ -138,11 +147,21 @@ private fun MarcusApp() {
                         Text("MARCUS", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
                         Text("THE DARK INTELLIGENCE  •  V16", color = Crimson, fontSize = 10.sp, letterSpacing = 1.5.sp)
                     }
-                    TextButton(onClick = { showSettings = !showSettings }) { Text("⚙", color = MutedGold, fontSize = 22.sp) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { showAppManager = !showAppManager; showSettings = false }) { Text("APPS", color = MutedGold, fontSize = 12.sp) }
+                        TextButton(onClick = { showSettings = !showSettings; showAppManager = false }) { Text("⚙", color = MutedGold, fontSize = 22.sp) }
+                    }
+                }
+
+                if (showAppManager) {
+                    MarcusAppManagerScreen(onClose = { showAppManager = false })
                 }
 
                 if (showSettings) {
-                    MarcusSettingsScreen(onClose = {
+                    MarcusSettingsScreen(userId = userId, onUserIdChange = { newId ->
+                        userId = newId
+                        prefs.edit().putString("userId", newId).apply()
+                    }, onClose = {
                         showSettings = false
                         answer = "Marcus configuration loaded."
                     })
