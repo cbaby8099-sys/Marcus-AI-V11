@@ -76,10 +76,10 @@ private fun MarcusApp() {
     var history by remember { mutableStateOf(listOf<String>()) }
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
 
-    val recognizer = remember {
-        if (SpeechRecognizer.isRecognitionAvailable(context)) {
-            SpeechRecognizer.createSpeechRecognizer(context)
-        } else null
+    var recognizer by remember {
+        mutableStateOf(
+            if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
+        )
     }
 
     DisposableEffect(Unit) {
@@ -95,7 +95,6 @@ private fun MarcusApp() {
         onDispose {
             engine.stop()
             engine.shutdown()
-            recognizer?.destroy()
         }
     }
 
@@ -153,6 +152,9 @@ private fun MarcusApp() {
                     SpeechRecognizer.ERROR_CLIENT -> "Speech session stopped. Tap the microphone to start a fresh session."
                     else -> "Speech recognition error ($error). Try again."
                 }
+                if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) {
+                    recognizer = if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
+                }
             }
             override fun onResults(results: Bundle?) {
                 listening = false
@@ -162,7 +164,7 @@ private fun MarcusApp() {
             override fun onPartialResults(partialResults: Bundle?) {}
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
-        onDispose { recognizer?.cancel() }
+        onDispose { recognizer?.cancel(); recognizer?.destroy() }
     }
 
     MaterialTheme(colorScheme = darkColorScheme(
