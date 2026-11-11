@@ -1,0 +1,3 @@
+<resources>
+    <string name="marcus_accessibility_description">Shows a floating Marcus shortcut. When tapped, it opens Marcus and activates the microphone button inside the Marcus app. It does not monitor or control other apps.</string>
+</resources>
