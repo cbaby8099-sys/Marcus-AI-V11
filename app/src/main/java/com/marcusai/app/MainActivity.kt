@@ -200,7 +200,7 @@ private fun MarcusApp() {
                         prefs.edit().putString("userId", newId).apply()
                     }, onClose = {
                         showSettings = false
-                        themeRefresh++
+                        themeName = context.getSharedPreferences("marcus_config_v15", 0).getString("theme", "Eternal Darkness") ?: "Eternal Darkness"
                         answer = "Marcus configuration loaded."
                     })
                 }
