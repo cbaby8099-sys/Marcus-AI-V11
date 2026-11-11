@@ -103,17 +103,68 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
             SettingsChoice("Theme", theme, listOf("Eternal Darkness", "Crimson Night", "Obsidian Gold", "Demonic Violet", "Abyss Blue", "Toxic Green")) { theme = it }
         }
 
-        SettingsSection("FLOATING ROBOT COMPANION") {
-            Text("Keep a movable Marcus robot bubble above your home screen and supported apps. Tapping it opens the mini panel and launches voice mode. Android requires you to grant display-over-other-apps permission manually.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-            Button(onClick = {
-                if (android.provider.Settings.canDrawOverlays(context)) {
-                    androidx.core.content.ContextCompat.startForegroundService(context, android.content.Intent(context, MarcusFloatingService::class.java))
-                } else {
-                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + context.packageName)))
+        SettingsSection("ROBOT FACE ICON") {
+            val faces = listOf("🤖", "◉_◉", "◈‿◈", "⟡_⟡")
+            var selectedFace by remember { mutableStateOf(prefs.getString("robot_face", "🤖") ?: "🤖") }
+            Text("Choose Marcus's floating robot face.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                faces.forEach { face ->
+                    FilterChip(
+                        selected = selectedFace == face,
+                        onClick = {
+                            selectedFace = face
+                            prefs.edit().putString("robot_face", face).apply()
+                            context.stopService(android.content.Intent(context, MarcusFloatingService::class.java))
+                            if (android.provider.Settings.canDrawOverlays(context)) {
+                                androidx.core.content.ContextCompat.startForegroundService(context, android.content.Intent(context, MarcusFloatingService::class.java))
+                            }
+                        },
+                        label = { Text(face, style = MaterialTheme.typography.titleLarge) }
+                    )
                 }
-            }, modifier = Modifier.fillMaxWidth()) { Text("ENABLE / START FLOATING ROBOT") }
+            }
+            Text("The selected face appears on the floating Marcus bubble.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+        }
+
+        SettingsSection("FLOATING ROBOT COMPANION") {
+            val overlayAllowed = remember { mutableStateOf(android.provider.Settings.canDrawOverlays(context)) }
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                while (true) {
+                    overlayAllowed.value = android.provider.Settings.canDrawOverlays(context)
+                    kotlinx.coroutines.delay(700)
+                }
+            }
+            Text(
+                if (overlayAllowed.value) "Overlay permission: ALLOWED ✓" else "Overlay permission: NOT ALLOWED",
+                color = if (overlayAllowed.value) Color(0xFF66D9A5) else Color(0xFFFFB36B),
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text("On your Redmi/Xiaomi, Android may place this under Special permissions or Other permissions. Open the permission page, find Marcus AI, then allow 'Display pop-up windows while running in the background' / 'Display over other apps'. Return here and tap START again.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Button(onClick = {
+                val opened = runCatching {
+                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + context.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }.isSuccess
+                if (!opened) runCatching {
+                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + context.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }, modifier = Modifier.fillMaxWidth()) { Text("OPEN OVERLAY PERMISSION SETTINGS") }
+            Button(
+                onClick = {
+                    if (android.provider.Settings.canDrawOverlays(context)) {
+                        androidx.core.content.ContextCompat.startForegroundService(context, android.content.Intent(context, MarcusFloatingService::class.java))
+                    } else {
+                        android.widget.Toast.makeText(context, "Allow Display over other apps for Marcus, return here, then tap START FLOATING ROBOT.", android.widget.Toast.LENGTH_LONG).show()
+                        runCatching {
+                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + context.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }.onFailure {
+                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + context.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("START FLOATING ROBOT") }
             OutlinedButton(onClick = {
-                context.startService(android.content.Intent(context, MarcusFloatingService::class.java).setAction(MarcusFloatingService.ACTION_STOP))
+                context.stopService(android.content.Intent(context, MarcusFloatingService::class.java))
             }, modifier = Modifier.fillMaxWidth()) { Text("TURN OFF FLOATING ROBOT") }
         }
 
