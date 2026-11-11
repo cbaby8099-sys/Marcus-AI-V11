@@ -103,6 +103,20 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
             SettingsChoice("Theme", theme, listOf("Eternal Darkness", "Crimson Night", "Obsidian Gold", "Demonic Violet", "Abyss Blue", "Toxic Green")) { theme = it }
         }
 
+        SettingsSection("FLOATING ROBOT COMPANION") {
+            Text("Keep a movable Marcus robot bubble above your home screen and supported apps. Tapping it opens the mini panel and launches voice mode. Android requires you to grant display-over-other-apps permission manually.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Button(onClick = {
+                if (android.provider.Settings.canDrawOverlays(context)) {
+                    androidx.core.content.ContextCompat.startForegroundService(context, android.content.Intent(context, MarcusFloatingService::class.java))
+                } else {
+                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + context.packageName)))
+                }
+            }, modifier = Modifier.fillMaxWidth()) { Text("ENABLE / START FLOATING ROBOT") }
+            OutlinedButton(onClick = {
+                context.startService(android.content.Intent(context, MarcusFloatingService::class.java).setAction(MarcusFloatingService.ACTION_STOP))
+            }, modifier = Modifier.fillMaxWidth()) { Text("TURN OFF FLOATING ROBOT") }
+        }
+
         SettingsSection("PHONE CONTROL") {
             Text("Enable Marcus navigation", color = Color.White, style = MaterialTheme.typography.titleSmall)
             Text("To let Marcus perform your spoken Home, Back and Recent Apps commands, Android requires you to enable its clearly disclosed accessibility service. Marcus does not silently take over the phone or read screen contents.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
@@ -113,7 +127,7 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
         }
 
         SettingsSection("APP & SECURITY") {
-            Text("Marcus V16 • Android edition", color = Color.White)
+            Text("Marcus V19 • Android edition", color = Color.White)
             Text("Never store API keys, passwords, broker credentials or recovery codes in chat history. Phone-control features require Android permissions and explicit confirmation.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
