@@ -38,10 +38,10 @@ import java.util.Locale
 import java.util.UUID
 
 private const val WORKER_URL = "https://marcus-ai.cbaby8099.workers.dev"
-private val VoidBlack = Color(0xFF070509)
-private val Crimson = Color(0xFFB0002A)
-private val MutedGold = Color(0xFFD6A64B)
-private val Panel = Color(0xFF19131D)
+private val VoidBlack = Color(0xFF080D14)
+private val Crimson = Color(0xFF31C8F5)
+private val MutedGold = Color(0xFF9AAFC2)
+private val Panel = Color(0xFF121C28)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -191,7 +191,7 @@ private fun MarcusApp(startVoice: Boolean = false) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("MARCUS", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                        Text("ROBOTIC CORE  •  V19", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
+                        Text("ROBOTIC CORE  •  V21", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showAppManager = !showAppManager; showSettings = false }) { Text("APPS", color = palette.accent, fontSize = 12.sp) }
@@ -391,6 +391,11 @@ private fun handleMarcusDeviceCommand(context: android.content.Context, raw: Str
         }
     }
     return when (command) {
+        "what's on my screen", "whats on my screen", "read my screen", "describe my screen" -> {
+            val visible = MarcusAccessibilityService.readVisibleScreen()
+            if (visible.isBlank()) "I couldn't read visible screen text. Enable Marcus Control in Android Accessibility settings, then try again."
+            else "Visible screen text (read only):\n$visible"
+        }
         "open settings", "open phone settings", "launch settings" -> {
             context.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             "Opening Android Settings."
@@ -441,7 +446,7 @@ private fun handleMarcusDeviceCommand(context: android.content.Context, raw: Str
         "open phone", "open dialer", "open calls" -> launchDeviceIntent(context, Intent(Intent.ACTION_DIAL), "Phone dialer")
         "open messages", "open sms" -> launchDeviceIntent(context, Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MESSAGING), "Messages")
         "open maps", "open navigation" -> launchDeviceIntent(context, Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=")), "Maps")
-        "open clock", "open alarm" -> launchDeviceIntent(context, Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CLOCK), "Clock")
+        "open clock", "open alarm" -> launchDeviceIntent(context, Intent("android.intent.action.SHOW_ALARMS"), "Clock")
         "open calendar" -> launchDeviceIntent(context, Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALENDAR), "Calendar")
         else -> null
     }
