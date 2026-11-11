@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
-import android.provider.Settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -107,77 +106,11 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
             SettingsChoice("Theme", theme, listOf("Eternal Darkness", "Titanium Cyan", "Neon Blue", "Stealth Graphite", "Arctic Silver", "Crimson Night", "Obsidian Gold", "Abyss Blue", "Toxic Green")) { theme = it }
         }
 
-        SettingsSection("ROBOT FACE ICON") {
-            val faces = listOf("🤖", "◉_◉", "◈‿◈", "⟡_⟡")
-            var selectedFace by remember { mutableStateOf(prefs.getString("robot_face", "🤖") ?: "🤖") }
-            Text("Choose Marcus's floating robot face.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                faces.forEach { face ->
-                    FilterChip(
-                        selected = selectedFace == face,
-                        onClick = {
-                            selectedFace = face
-                            prefs.edit().putString("robot_face", face).apply()
-                            context.stopService(android.content.Intent(context, MarcusFloatingService::class.java))
-                            if (android.provider.Settings.canDrawOverlays(context)) {
-                                androidx.core.content.ContextCompat.startForegroundService(context, android.content.Intent(context, MarcusFloatingService::class.java))
-                            }
-                        },
-                        label = { Text(face, style = MaterialTheme.typography.titleLarge) }
-                    )
-                }
-            }
-            Text("The selected face appears on the floating Marcus bubble.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-        }
-
-        SettingsSection("FLOATING ROBOT COMPANION") {
-            val overlayAllowed = remember { mutableStateOf(android.provider.Settings.canDrawOverlays(context)) }
-            androidx.compose.runtime.LaunchedEffect(Unit) {
-                while (true) {
-                    overlayAllowed.value = android.provider.Settings.canDrawOverlays(context)
-                    kotlinx.coroutines.delay(700)
-                }
-            }
-            Text(
-                if (overlayAllowed.value) "Overlay permission: ALLOWED ✓" else "Overlay permission: NOT ALLOWED",
-                color = if (overlayAllowed.value) Color(0xFF66D9A5) else Color(0xFFFFB36B),
-                style = MaterialTheme.typography.titleSmall
-            )
-            Text("On your Redmi/Xiaomi, Android may place this under Special permissions or Other permissions. Open the permission page, find Marcus AI, then allow 'Display pop-up windows while running in the background' / 'Display over other apps'. Return here and tap START again.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-            Button(onClick = {
-                val opened = runCatching {
-                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + context.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                }.isSuccess
-                if (!opened) runCatching {
-                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + context.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                }
-            }, modifier = Modifier.fillMaxWidth()) { Text("OPEN OVERLAY PERMISSION SETTINGS") }
-            Button(
-                onClick = {
-                    if (android.provider.Settings.canDrawOverlays(context)) {
-                        androidx.core.content.ContextCompat.startForegroundService(context, android.content.Intent(context, MarcusFloatingService::class.java))
-                    } else {
-                        android.widget.Toast.makeText(context, "Allow Display over other apps for Marcus, return here, then tap START FLOATING ROBOT.", android.widget.Toast.LENGTH_LONG).show()
-                        runCatching {
-                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + context.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                        }.onFailure {
-                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + context.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("START FLOATING ROBOT") }
-            OutlinedButton(onClick = {
-                context.stopService(android.content.Intent(context, MarcusFloatingService::class.java))
-            }, modifier = Modifier.fillMaxWidth()) { Text("TURN OFF FLOATING ROBOT") }
-        }
-
         SettingsSection("PERMISSION CENTRE  •  V50") {
             var refreshKey by remember { mutableIntStateOf(0) }
             val micGranted = remember(refreshKey) {
                 androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
             }
-            val overlayGranted = remember(refreshKey) { Settings.canDrawOverlays(context) }
             val accessibilityGranted = remember(refreshKey) {
                 val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
                 val component = ComponentName(context, MarcusAccessibilityService::class.java).flattenToString()
@@ -187,10 +120,9 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
                 android.os.Build.VERSION.SDK_INT < 33 ||
                     androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
             }
-            Text("Phone control works without the floating overlay. Accessibility is the key permission for supported navigation and screen reading.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Text("Marcus does not need Display over other apps permission. Accessibility is optional and only needed for supported navigation and screen reading.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
             PermissionStatusRow("Accessibility • phone navigation", accessibilityGranted)
             PermissionStatusRow("Microphone • voice commands", micGranted)
-            PermissionStatusRow("Overlay • floating robot only", overlayGranted)
             PermissionStatusRow("Notifications • status alerts", notificationsGranted)
             OutlinedButton(onClick = { refreshKey++ }, modifier = Modifier.fillMaxWidth()) { Text("REFRESH PERMISSION STATUS") }
             Button(onClick = {
@@ -200,7 +132,7 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
                 runCatching { context.startActivity(android.content.Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
             }, modifier = Modifier.fillMaxWidth()) { Text("OPEN MARCUS APP INFO") }
             Text("If Android shows 'Allow restricted settings', you must approve it manually from App info when that option is available. Marcus cannot switch this protection off, grant itself access, or bypass Play Protect.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-            Text("Overlay is optional: it is only required for the floating robot bubble. App launching and supported settings shortcuts do not need overlay access. Home, Back, Recents and screen reading require Marcus Control to be enabled in Accessibility.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Text("App launching and supported settings shortcuts work without Accessibility. Home, Back, Recents and screen reading require Marcus Control to be enabled manually in Android Accessibility settings.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
         SettingsSection("APP & SECURITY") {
