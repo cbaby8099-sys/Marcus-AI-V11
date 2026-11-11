@@ -58,6 +58,14 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
                     if (value.length >= 8) { onUserIdChange(value); saved = true }
                 }, modifier = Modifier.weight(1f)) { Text("RESTORE / SAVE ID") }
             }
+            OutlinedButton(onClick = {
+                val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_TEXT, userId)
+                }
+                context.startActivity(android.content.Intent.createChooser(share, "Share Marcus ID"))
+            }, modifier = Modifier.fillMaxWidth()) { Text("SHARE MARCUS ID") }
+            }
             Text("Keep this ID safe. It identifies your Marcus account on the connected backend. A manually entered ID must already exist there to restore its cloud history.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
@@ -96,7 +104,7 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
         }
 
         SettingsSection("APP & SECURITY") {
-            Text("Marcus V15 • Android edition", color = Color.White)
+            Text("Marcus V17 • Android edition", color = Color.White)
             Text("Never store API keys, passwords, broker credentials or recovery codes in chat history. Phone-control features require Android permissions and explicit confirmation.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
