@@ -112,7 +112,7 @@ fun MarcusSettingsScreen(onClose: () -> Unit) {
 @Composable
 private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = SettingsPanel)) {
-        Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content) {
+        Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, color = SettingsGold, style = MaterialTheme.typography.titleSmall)
             content()
         }
