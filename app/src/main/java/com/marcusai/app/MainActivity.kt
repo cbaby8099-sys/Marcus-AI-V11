@@ -142,19 +142,10 @@ private fun MarcusApp() {
                 }
 
                 if (showSettings) {
-                    Card(Modifier.fillMaxWidth().padding(top = 12.dp), colors = CardDefaults.cardColors(containerColor = Panel)) {
-                        Column(Modifier.padding(14.dp)) {
-                            Text("MEMORY & CONNECTION", color = MutedGold, fontWeight = FontWeight.Bold)
-                            OutlinedTextField(value = idDraft, onValueChange = { idDraft = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Marcus user ID") }, singleLine = true)
-                            Button(onClick = {
-                                userId = idDraft.trim()
-                                prefs.edit().putString("userId", userId).apply()
-                                showSettings = false
-                                answer = "User ID saved on this device."
-                            }, Modifier.fillMaxWidth()) { Text("SAVE") }
-                            Text("Your ID stays on this device. Never share passwords or API keys here.", color = Color.LightGray, fontSize = 11.sp)
-                        }
-                    }
+                    MarcusSettingsScreen(onClose = {
+                        showSettings = false
+                        answer = "Marcus configuration loaded."
+                    })
                 }
 
                 Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
