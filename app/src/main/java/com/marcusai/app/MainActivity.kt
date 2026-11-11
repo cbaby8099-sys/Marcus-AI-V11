@@ -69,6 +69,8 @@ private fun MarcusApp() {
     var busy by remember { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var themeName by remember { mutableStateOf(context.getSharedPreferences("marcus_config_v15", 0).getString("theme", "Eternal Darkness") ?: "Eternal Darkness") }
+    val palette = remember(themeName) { MarcusThemePalette.from(themeName) }
     var showAppManager by remember { mutableStateOf(false) }
     var chatMode by remember { mutableStateOf(true) }
     var history by remember { mutableStateOf(listOf<String>()) }
@@ -76,19 +78,15 @@ private fun MarcusApp() {
     val configPrefs = remember { context.getSharedPreferences("marcus_config_v15", 0) }
     var themeRefresh by remember { mutableIntStateOf(0) }
     val selectedTheme = remember(themeRefresh) { configPrefs.getString("theme", "Eternal Darkness") ?: "Eternal Darkness" }
-    val (VoidBlack, Crimson, MutedGold, Panel) = when (selectedTheme) {
-        "Crimson Night" -> listOf(Color(0xFF100308), Color(0xFFFF1744), Color(0xFFFF8A80), Color(0xFF28101A))
+    val (palette.background, palette.primary, palette.accent, palette.surface) = when (selectedTheme) {
+        "palette.primary Night" -> listOf(Color(0xFF100308), Color(0xFFFF1744), Color(0xFFFF8A80), Color(0xFF28101A))
         "Obsidian Gold" -> listOf(Color(0xFF080808), Color(0xFFB58A32), Color(0xFFFFD978), Color(0xFF1D1A12))
         else -> listOf(Color(0xFF070509), Color(0xFFB0002A), Color(0xFFD6A64B), Color(0xFF19131D))
     }
 
     val recognizer = remember {
         if (SpeechRecognizer.isRecognitionAvailable(context)) {
-            if (android.os.Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
-                SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-            } else {
-                SpeechRecognizer.createSpeechRecognizer(context)
-            }
+            SpeechRecognizer.createSpeechRecognizer(context)
         } else null
     }
 
@@ -177,14 +175,14 @@ private fun MarcusApp() {
     }
 
     MaterialTheme(colorScheme = darkColorScheme(
-        primary = Crimson,
-        background = VoidBlack,
-        surface = Panel,
+        primary = palette.primary,
+        background = palette.background,
+        surface = palette.surface,
         onSurface = Color.White
     )) {
         Box(
             Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Color(0xFF26000D), VoidBlack, Color(0xFF080D18)))
+                Brush.verticalGradient(listOf(Color(0xFF26000D), palette.background, Color(0xFF080D18)))
             )
         ) {
             Column(
@@ -193,11 +191,11 @@ private fun MarcusApp() {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("MARCUS", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                        Text("THE DARK INTELLIGENCE  •  V18", color = Crimson, fontSize = 10.sp, letterSpacing = 1.5.sp)
+                        Text("THE DARK INTELLIGENCE  •  V18", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { showAppManager = !showAppManager; showSettings = false }) { Text("APPS", color = MutedGold, fontSize = 12.sp) }
-                        TextButton(onClick = { showSettings = !showSettings; showAppManager = false }) { Text("⚙", color = MutedGold, fontSize = 22.sp) }
+                        TextButton(onClick = { showAppManager = !showAppManager; showSettings = false }) { Text("APPS", color = palette.accent, fontSize = 12.sp) }
+                        TextButton(onClick = { showSettings = !showSettings; showAppManager = false }) { Text("⚙", color = palette.accent, fontSize = 22.sp) }
                     }
                 }
 
@@ -220,18 +218,18 @@ private fun MarcusApp() {
                     FilterChip(selected = chatMode, onClick = { chatMode = true }, label = { Text("CHAT") })
                     FilterChip(selected = !chatMode, onClick = { chatMode = false }, label = { Text("VOICE") })
                     Spacer(Modifier.weight(1f))
-                    Text(if (busy) "THINKING…" else if (listening) "LISTENING…" else "ONLINE UI", color = MutedGold, fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterVertically))
+                    Text(if (busy) "THINKING…" else if (listening) "LISTENING…" else "ONLINE UI", color = palette.accent, fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterVertically))
                 }
 
                 if (!chatMode) {
                     Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Box(Modifier.size(190.dp).background(Brush.radialGradient(listOf(Crimson.copy(alpha = 0.55f), Panel, VoidBlack)), RoundedCornerShape(100.dp)), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(190.dp).background(Brush.radialGradient(listOf(palette.primary.copy(alpha = 0.55f), palette.surface, palette.background)), RoundedCornerShape(100.dp)), contentAlignment = Alignment.Center) {
                             Text("M", color = Color.White, fontSize = 100.sp, fontWeight = FontWeight.Black)
                         }
                         Spacer(Modifier.height(18.dp))
-                        Text("THE ENTITY IS AWAKE", color = Crimson, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                        Text("THE ENTITY IS AWAKE", color = palette.primary, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                         Spacer(Modifier.height(8.dp))
-                        Text(answer, color = Color.White, modifier = Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(16.dp)).padding(16.dp))
+                        Text(answer, color = Color.White, modifier = Modifier.fillMaxWidth().background(palette.surface, RoundedCornerShape(16.dp)).padding(16.dp))
                         Spacer(Modifier.height(12.dp))
                         Button(onClick = {
                                             requestMarcusMic()
@@ -244,17 +242,17 @@ private fun MarcusApp() {
                             Text("Welcome. Start a conversation with Marcus.", color = Color.LightGray, modifier = Modifier.padding(12.dp))
                         }
                         items(history) { line ->
-                            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Panel)) {
+                            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = palette.surface)) {
                                 Text(line, color = Color.White, modifier = Modifier.padding(13.dp))
                             }
                         }
-                        if (busy) item { Text("MARCUS IS THINKING…", color = MutedGold) }
+                        if (busy) item { Text("MARCUS IS THINKING…", color = palette.accent) }
                     }
                     OutlinedTextField(value = message, onValueChange = { message = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Message Marcus…") }, maxLines = 4)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         IconButton(onClick = {
                             requestMarcusMic()
-                        }) { Text("🎙", color = MutedGold) }
+                        }) { Text("🎙", color = palette.accent) }
                         Button(onClick = {
                             val outgoing = message
                             if (outgoing.isNotBlank()) {
