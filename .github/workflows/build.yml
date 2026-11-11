@@ -40,12 +40,12 @@ jobs:
           sdkmanager "platforms;android-35"
           sdkmanager "build-tools;35.0.0"
 
-      - name: Build Marcus V17
+      - name: Build Marcus V18
         run: gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: marcus-ai-v17-eternal-darkness
+          name: marcus-ai-v18-futuristic
           path: app/build/outputs/apk/debug/app-debug.apk
           
