@@ -16,7 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
 private val SettingsGold = Color(0xFF31C8F5)
-private val SettingsPanel = Color(0xFF19131D)
+private val SettingsPanel = Color(0xFF121C28)
 
 @Composable
 fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClose: () -> Unit) {
@@ -104,7 +104,7 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
         }
 
         SettingsSection("APPEARANCE") {
-            SettingsChoice("Theme", theme, listOf("Eternal Darkness", "Crimson Night", "Obsidian Gold", "Demonic Violet", "Abyss Blue", "Toxic Green")) { theme = it }
+            SettingsChoice("Theme", theme, listOf("Eternal Darkness", "Titanium Cyan", "Neon Blue", "Stealth Graphite", "Arctic Silver", "Crimson Night", "Obsidian Gold", "Abyss Blue", "Toxic Green")) { theme = it }
         }
 
         SettingsSection("ROBOT FACE ICON") {
