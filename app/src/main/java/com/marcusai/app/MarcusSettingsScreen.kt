@@ -102,6 +102,15 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
             SettingsChoice("Theme", theme, listOf("Eternal Darkness", "Crimson Night", "Obsidian Gold")) { theme = it }
         }
 
+        SettingsSection("PHONE CONTROL") {
+            Text("Enable Marcus navigation", color = Color.White, style = MaterialTheme.typography.titleSmall)
+            Text("To let Marcus perform your spoken Home, Back and Recent Apps commands, Android requires you to enable its clearly disclosed accessibility service. Marcus does not read screen contents or tap arbitrary controls.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Button(onClick = {
+                context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            }, modifier = Modifier.fillMaxWidth()) { Text("OPEN ACCESSIBILITY SETTINGS") }
+            Text("Supported direct commands: open WhatsApp, TikTok, Chrome, YouTube, Play Store, MT5; open Settings, Wi-Fi, Bluetooth, Display or Sound settings; go Home; go Back; show Recent Apps.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+        }
+
         SettingsSection("APP & SECURITY") {
             Text("Marcus V17 • Android edition", color = Color.White)
             Text("Never store API keys, passwords, broker credentials or recovery codes in chat history. Phone-control features require Android permissions and explicit confirmation.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
