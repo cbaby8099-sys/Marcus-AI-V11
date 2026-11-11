@@ -1,0 +1,147 @@
+package com.marcusai.app
+
+import android.content.Context
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+
+private val SettingsGold = Color(0xFFD6A64B)
+private val SettingsPanel = Color(0xFF19131D)
+
+@Composable
+fun MarcusSettingsScreen(onClose: () -> Unit) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("marcus_config_v15", Context.MODE_PRIVATE) }
+
+    var assistantName by remember { mutableStateOf(prefs.getString("assistant_name", "Marcus") ?: "Marcus") }
+    var personality by remember { mutableStateOf(prefs.getString("personality", "Calm and strategic") ?: "Calm and strategic") }
+    var responseLength by remember { mutableStateOf(prefs.getString("response_length", "Balanced") ?: "Balanced") }
+    var language by remember { mutableStateOf(prefs.getString("language", "English (US)") ?: "English (US)") }
+    var voiceEnabled by remember { mutableStateOf(prefs.getBoolean("voice_enabled", true)) }
+    var autoSpeak by remember { mutableStateOf(prefs.getBoolean("auto_speak", false)) }
+    var speechRate by remember { mutableFloatStateOf(prefs.getFloat("speech_rate", 0.90f)) }
+    var memoryEnabled by remember { mutableStateOf(prefs.getBoolean("memory_enabled", true)) }
+    var saveHistory by remember { mutableStateOf(prefs.getBoolean("save_history", true)) }
+    var confirmActions by remember { mutableStateOf(prefs.getBoolean("confirm_actions", true)) }
+    var showReasoningSummary by remember { mutableStateOf(prefs.getBoolean("reasoning_summary", true)) }
+    var notifications by remember { mutableStateOf(prefs.getBoolean("notifications", false)) }
+    var compactMode by remember { mutableStateOf(prefs.getBoolean("compact_mode", false)) }
+    var tradingEducation by remember { mutableStateOf(prefs.getBoolean("trading_education", true)) }
+    var theme by remember { mutableStateOf(prefs.getString("theme", "Eternal Darkness") ?: "Eternal Darkness") }
+    var saved by remember { mutableStateOf(false) }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text("MARCUS CONFIGURATION", color = SettingsGold, style = MaterialTheme.typography.titleLarge)
+        Text("Personalise the assistant, voice, privacy and interface.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+
+        SettingsSection("IDENTITY & PERSONALITY") {
+            OutlinedTextField(assistantName, { assistantName = it }, Modifier.fillMaxWidth(), label = { Text("Assistant name") }, singleLine = true)
+            SettingsChoice("Personality", personality, listOf("Calm and strategic", "Direct and concise", "Friendly and encouraging", "Formal and analytical", "Dark fictional character style")) { personality = it }
+            SettingsChoice("Response detail", responseLength, listOf("Concise", "Balanced", "Detailed")) { responseLength = it }
+            SettingsChoice("Language", language, listOf("English (US)", "English (UK)", "English (South Africa)")) { language = it }
+        }
+
+        SettingsSection("VOICE & SPEECH") {
+            SettingsToggle("Voice features enabled", voiceEnabled) { voiceEnabled = it }
+            SettingsToggle("Read replies aloud automatically", autoSpeak) { autoSpeak = it }
+            Text("Speech rate: ${"%.2f".format(speechRate)}×", color = Color.White)
+            Slider(value = speechRate, onValueChange = { speechRate = it }, valueRange = 0.70f..1.20f, enabled = voiceEnabled)
+            Text("Uses Android speech recognition and text-to-speech. A separate voice model is not included.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+        }
+
+        SettingsSection("MEMORY & PRIVACY") {
+            SettingsToggle("Personal memory", memoryEnabled) { memoryEnabled = it }
+            SettingsToggle("Save chat history on this device", saveHistory) { saveHistory = it }
+            SettingsToggle("Ask before sensitive actions", confirmActions) { confirmActions = it }
+            Text("Memory and history settings are local preferences. They do not create cloud storage or guarantee server-side deletion.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+        }
+
+        SettingsSection("RESPONSE BEHAVIOUR") {
+            SettingsToggle("Show short answer summaries", showReasoningSummary) { showReasoningSummary = it }
+            SettingsToggle("Notifications", notifications) { notifications = it }
+            SettingsToggle("Compact interface", compactMode) { compactMode = it }
+            SettingsToggle("FX learning tools", tradingEducation) { tradingEducation = it }
+            Text("FX tools are for chart learning and demo practice. Live trades and financial actions must remain under your control.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+        }
+
+        SettingsSection("APPEARANCE") {
+            SettingsChoice("Theme", theme, listOf("Eternal Darkness", "Crimson Night", "Obsidian Gold")) { theme = it }
+        }
+
+        SettingsSection("APP & SECURITY") {
+            Text("Marcus V15 • Android edition", color = Color.White)
+            Text("Never store API keys, passwords, broker credentials or recovery codes in chat history. Phone-control features require Android permissions and explicit confirmation.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+        }
+
+        Button(
+            onClick = {
+                prefs.edit()
+                    .putString("assistant_name", assistantName.trim().ifBlank { "Marcus" })
+                    .putString("personality", personality)
+                    .putString("response_length", responseLength)
+                    .putString("language", language)
+                    .putBoolean("voice_enabled", voiceEnabled)
+                    .putBoolean("auto_speak", autoSpeak)
+                    .putFloat("speech_rate", speechRate)
+                    .putBoolean("memory_enabled", memoryEnabled)
+                    .putBoolean("save_history", saveHistory)
+                    .putBoolean("confirm_actions", confirmActions)
+                    .putBoolean("reasoning_summary", showReasoningSummary)
+                    .putBoolean("notifications", notifications)
+                    .putBoolean("compact_mode", compactMode)
+                    .putBoolean("trading_education", tradingEducation)
+                    .putString("theme", theme)
+                    .apply()
+                saved = true
+            },
+            Modifier.fillMaxWidth()
+        ) { Text(if (saved) "SETTINGS SAVED ✓" else "SAVE CONFIGURATION") }
+        OutlinedButton(onClick = onClose, Modifier.fillMaxWidth()) { Text("RETURN TO MARCUS") }
+    }
+}
+
+@Composable
+private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = SettingsPanel)) {
+        Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content) {
+            Text(title, color = SettingsGold, style = MaterialTheme.typography.titleSmall)
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SettingsToggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = Color.White, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@Composable
+private fun SettingsChoice(label: String, selected: String, options: List<String>, onSelect: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Column {
+        Text(label, color = Color.LightGray, style = MaterialTheme.typography.labelMedium)
+        Box {
+            OutlinedButton(onClick = { expanded = true }, Modifier.fillMaxWidth()) {
+                Text(selected, modifier = Modifier.weight(1f))
+                Text("⌄")
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                options.forEach { option ->
+                    DropdownMenuItem(text = { Text(option) }, onClick = { onSelect(option); expanded = false })
+                }
+            }
+        }
+    }
+}
