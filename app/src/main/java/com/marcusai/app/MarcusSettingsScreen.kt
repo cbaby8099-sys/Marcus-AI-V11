@@ -11,8 +11,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
-private val SettingsGold = Color(0xFFD6A64B)
-private val SettingsPanel = Color(0xFF19131D)
+private val SettingsGold = Color(0xFF9BCBFF)
+private val SettingsPanel = Color(0xFF121E30)
 
 @Composable
 fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClose: () -> Unit) {
@@ -33,7 +33,7 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
     var notifications by remember { mutableStateOf(prefs.getBoolean("notifications", false)) }
     var compactMode by remember { mutableStateOf(prefs.getBoolean("compact_mode", false)) }
     var tradingEducation by remember { mutableStateOf(prefs.getBoolean("trading_education", true)) }
-    var theme by remember { mutableStateOf(prefs.getString("theme", "Eternal Darkness") ?: "Eternal Darkness") }
+    var theme by remember { mutableStateOf(prefs.getString("theme", "Midnight Blue") ?: "Midnight Blue") }
     var saved by remember { mutableStateOf(false) }
     var idDraft by remember(userId) { mutableStateOf(userId) }
 
@@ -70,7 +70,7 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
 
         SettingsSection("IDENTITY & PERSONALITY") {
             OutlinedTextField(assistantName, { assistantName = it }, Modifier.fillMaxWidth(), label = { Text("Assistant name") }, singleLine = true)
-            SettingsChoice("Personality", personality, listOf("Calm and strategic", "Direct and concise", "Friendly and encouraging", "Formal and analytical", "Dark fictional character style")) { personality = it }
+            SettingsChoice("Personality", personality, listOf("Calm and strategic", "Direct and concise", "Friendly and encouraging", "Formal and analytical", "Professional and adaptive")) { personality = it }
             SettingsChoice("Response detail", responseLength, listOf("Concise", "Balanced", "Detailed")) { responseLength = it }
             SettingsChoice("Language", language, listOf("English (US)", "English (UK)", "English (South Africa)")) { language = it }
         }
@@ -104,7 +104,8 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
         }
 
         SettingsSection("APPEARANCE") {
-            SettingsChoice("Theme", theme, listOf("Eternal Darkness", "Crimson Night", "Obsidian Gold")) { theme = it }
+            Text("Choose a futuristic interface identity. Changes apply when you return to the dashboard.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            SettingsChoice("Theme", theme, listOf("Midnight Blue", "Arctic Silver", "Neon Cyber")) { theme = it }
         }
 
         SettingsSection("PHONE CONTROL") {
@@ -117,7 +118,7 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
         }
 
         SettingsSection("APP & SECURITY") {
-            Text("Marcus V18 • Android edition", color = Color.White)
+            Text("Marcus V18 • Futuristic AI edition", color = Color.White)
             Text("Never store API keys, passwords, broker credentials or recovery codes in chat history. Phone-control features require Android permissions and explicit confirmation.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
