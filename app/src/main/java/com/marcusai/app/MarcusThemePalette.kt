@@ -11,6 +11,6 @@ object MarcusThemePalette {
         "Abyss Blue" -> MarcusPalette(Color(0xFF050810), Color(0xFF111C2B), Color(0xFF276BCE), Color(0xFF83C7FF), Color(0xFF071B35))
         "Toxic Green" -> MarcusPalette(Color(0xFF050906), Color(0xFF142018), Color(0xFF36A852), Color(0xFF9CE6A5), Color(0xFF092512))
         "Demonic Violet" -> MarcusPalette(Color(0xFF08050D), Color(0xFF1B1226), Color(0xFF873BE0), Color(0xFFC69AFF), Color(0xFF260C3D))
-        else -> MarcusPalette(Color(0xFF070509), Color(0xFF19131D), Color(0xFFB0002A), Color(0xFFD6A64B), Color(0xFF080D18))
+        else -> MarcusPalette(Color(0xFF050B14), Color(0xFF101D2B), Color(0xFF00BDEB), Color(0xFF8CEEFF), Color(0xFF071A2D))
     }
 }
