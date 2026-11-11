@@ -83,6 +83,7 @@ fun MarcusApp() {
     var history by remember { mutableStateOf(listOf<String>()) }
 
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
+    var engineReady by remember { mutableStateOf(false) }
 
     val recognizer = remember {
         if (SpeechRecognizer.isRecognitionAvailable(context)) {
@@ -91,26 +92,21 @@ fun MarcusApp() {
     }
 
     DisposableEffect(Unit) {
-    val engine = TextToSpeech(context, null)
-    tts = engine
-
-    engine.language = Locale.UK
-    engine.setSpeechRate(0.9f)
-    engine.setPitch(0.85f)
-
-    onDispose {
-        engine.stop()
-        engine.shutdown()
-    }
-    }
-
+        val engine = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                engineReady = true
+                engine.language = Locale.US
+                engine.setSpeechRate(0.9f)
+                engine.setPitch(0.82f)
+            }
+        }
+        tts = engine
         onDispose {
-            recognizer?.cancel()
-            recognizer?.destroy()
             engine.stop()
             engine.shutdown()
         }
     }
+
 
     fun speak(text: String) {
         tts?.speak(
