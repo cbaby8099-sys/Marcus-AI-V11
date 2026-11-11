@@ -38,10 +38,10 @@ import java.util.Locale
 import java.util.UUID
 
 private const val WORKER_URL = "https://marcus-ai.cbaby8099.workers.dev"
-private val VoidBlack = Color(0xFF070509)
-private val Crimson = Color(0xFFB0002A)
-private val MutedGold = Color(0xFFD6A64B)
-private val Panel = Color(0xFF19131D)
+private val VoidBlack = Color(0xFF080D18)
+private val Crimson = Color(0xFF3B82F6)
+private val MutedGold = Color(0xFF9BCBFF)
+private val Panel = Color(0xFF121E30)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -75,11 +75,11 @@ private fun MarcusApp() {
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
     val configPrefs = remember { context.getSharedPreferences("marcus_config_v15", 0) }
     var themeRefresh by remember { mutableIntStateOf(0) }
-    val selectedTheme = remember(themeRefresh) { configPrefs.getString("theme", "Eternal Darkness") ?: "Eternal Darkness" }
+    val selectedTheme = remember(themeRefresh) { configPrefs.getString("theme", "Midnight Blue") ?: "Midnight Blue" }
     val (VoidBlack, Crimson, MutedGold, Panel) = when (selectedTheme) {
-        "Crimson Night" -> listOf(Color(0xFF100308), Color(0xFFFF1744), Color(0xFFFF8A80), Color(0xFF28101A))
-        "Obsidian Gold" -> listOf(Color(0xFF080808), Color(0xFFB58A32), Color(0xFFFFD978), Color(0xFF1D1A12))
-        else -> listOf(Color(0xFF070509), Color(0xFFB0002A), Color(0xFFD6A64B), Color(0xFF19131D))
+        "Arctic Silver" -> listOf(Color(0xFF101820), Color(0xFFD8E6F3), Color(0xFF9FB7CC), Color(0xFF1D2B38))
+        "Neon Cyber" -> listOf(Color(0xFF050B18), Color(0xFF00D9FF), Color(0xFFB6A0FF), Color(0xFF101D32))
+        else -> listOf(Color(0xFF080D18), Color(0xFF3B82F6), Color(0xFF9BCBFF), Color(0xFF121E30))
     }
 
     val recognizer = remember {
@@ -184,7 +184,7 @@ private fun MarcusApp() {
     )) {
         Box(
             Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Crimson.copy(alpha = 0.28f), VoidBlack, Panel))
+                Brush.verticalGradient(listOf(Crimson.copy(alpha = 0.20f), VoidBlack, Panel))
             )
         ) {
             Column(
@@ -193,7 +193,7 @@ private fun MarcusApp() {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("MARCUS", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                        Text("THE DARK INTELLIGENCE  •  V18", color = Crimson, fontSize = 10.sp, letterSpacing = 1.5.sp)
+                        Text("PERSONAL AI SYSTEM  •  V18", color = Crimson, fontSize = 10.sp, letterSpacing = 1.5.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showAppManager = !showAppManager; showSettings = false }) { Text("APPS", color = MutedGold, fontSize = 12.sp) }
@@ -239,7 +239,7 @@ private fun MarcusApp() {
                             Text("M", color = Color.White, fontSize = 100.sp, fontWeight = FontWeight.Black)
                         }
                         Spacer(Modifier.height(18.dp))
-                        Text("THE ENTITY IS AWAKE", color = Crimson, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                        Text("MARCUS IS ONLINE", color = Crimson, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                         Spacer(Modifier.height(8.dp))
                         Text(answer, color = Color.White, modifier = Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(16.dp)).padding(16.dp))
                         Spacer(Modifier.height(12.dp))
