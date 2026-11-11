@@ -11,6 +11,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -191,7 +196,7 @@ private fun MarcusApp(startVoice: Boolean = false) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("MARCUS", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                        Text("ROBOTIC CORE  •  V21", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
+                        Text("ROBOTIC CORE  •  V50", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showAppManager = !showAppManager; showSettings = false }) { Text("APPS", color = palette.accent, fontSize = 12.sp) }
@@ -223,9 +228,7 @@ private fun MarcusApp(startVoice: Boolean = false) {
 
                 if (!chatMode) {
                     Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Box(Modifier.size(190.dp).background(Brush.radialGradient(listOf(palette.primary.copy(alpha = 0.55f), palette.surface, palette.background)), RoundedCornerShape(100.dp)), contentAlignment = Alignment.Center) {
-                            Text("M", color = Color.White, fontSize = 100.sp, fontWeight = FontWeight.Black)
-                        }
+                        MarcusRobotFace(palette = palette, listening = listening)
                         Spacer(Modifier.height(18.dp))
                         Text("THE ENTITY IS AWAKE", color = palette.primary, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                         Spacer(Modifier.height(8.dp))
@@ -459,4 +462,40 @@ private fun launchDeviceIntent(context: android.content.Context, intent: Intent,
         runCatching { context.startActivity(intent) }
             .fold({ "Opening $label." }, { "$label could not be opened on this device." })
     } else "$label is not available on this device."
+}
+
+
+@Composable
+private fun MarcusRobotFace(palette: MarcusPalette, listening: Boolean) {
+    val transition = rememberInfiniteTransition(label = "marcus_eye_glow")
+    val glow = transition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(animation = tween(950), repeatMode = RepeatMode.Reverse),
+        label = "eye_glow"
+    )
+    Box(
+        Modifier.size(190.dp).background(
+            Brush.radialGradient(listOf(palette.primary.copy(alpha = 0.42f), palette.surface, palette.background)),
+            RoundedCornerShape(100.dp)
+        ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Box(Modifier.width(12.dp).height(10.dp).background(palette.primary.copy(alpha = glow.value), RoundedCornerShape(5.dp)))
+            Box(
+                Modifier.padding(top = 5.dp).width(126.dp).height(108.dp)
+                    .background(Brush.verticalGradient(listOf(Color(0xFF34495B), Color(0xFF111C28))), RoundedCornerShape(30.dp))
+                    .padding(horizontal = 17.dp, vertical = 25.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    repeat(2) {
+                        Box(Modifier.weight(1f).height(17.dp).background(palette.accent.copy(alpha = glow.value), RoundedCornerShape(10.dp)))
+                    }
+                }
+            }
+            Box(Modifier.padding(top = 7.dp).width(46.dp).height(5.dp).background(palette.primary.copy(alpha = if (listening) 1f else 0.65f), RoundedCornerShape(4.dp)))
+        }
+    }
 }
