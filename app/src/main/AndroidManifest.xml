@@ -10,7 +10,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="Marcus AI"
+        android:label="Marcus V1000"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="false">
 
