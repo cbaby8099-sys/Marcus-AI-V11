@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Marcus AI</string>
+    <string name="marcus_accessibility_description">Allows Marcus to perform user-requested navigation, scrolling and text entry on this device. Sensitive actions remain under user control.</string>
+</resources>
