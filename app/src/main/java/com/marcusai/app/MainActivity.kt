@@ -5,8 +5,13 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognizerIntent
+import android.speech.RecognitionListener
+import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -27,6 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -76,110 +84,158 @@ fun MarcusApp() {
     var chatMode by remember { mutableStateOf(false) }
     var messages by remember { mutableStateOf(listOf<String>()) }
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
+    var continuousMode by remember { mutableStateOf(false) }
+    var micStatus by remember { mutableStateOf("READY") }
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val latestContinuous by rememberUpdatedState(continuousMode)
+    val latestBusy by rememberUpdatedState(busy)
+    val latestUserId by rememberUpdatedState(userId)
+    val latestMessages by rememberUpdatedState(messages)
+    val latestTts by rememberUpdatedState(tts)
+    val speechRecognizer = remember(context) {
+        if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
+    }
+    var startRecognizer by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val recognitionIntent = remember {
+        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+    }
 
     DisposableEffect(context) {
-        val engine = TextToSpeech(context) {
-            if (it == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.UK
+        lateinit var engine: TextToSpeech
+        engine = TextToSpeech(context) { result ->
+            if (result == TextToSpeech.SUCCESS) {
+                engine.language = Locale.UK
+                engine.setSpeechRate(1.05f)
+                engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {
+                        mainHandler.post { micStatus = "MARCUS IS SPEAKING..." }
+                    }
+                    override fun onDone(utteranceId: String?) {
+                        mainHandler.post {
+                            if (latestContinuous && !latestBusy) {
+                                micStatus = "LISTENING..."
+                                mainHandler.postDelayed({ startRecognizer?.invoke() }, 400L)
+                            } else if (!latestContinuous) micStatus = "READY"
+                        }
+                    }
+                    @Deprecated("Deprecated in Java")
+                    override fun onError(utteranceId: String?) {
+                        mainHandler.post {
+                            if (latestContinuous && !latestBusy) mainHandler.postDelayed({ startRecognizer?.invoke() }, 800L)
+                        }
+                    }
+                })
             }
         }
         tts = engine
-        onDispose {
-            engine.stop()
-            engine.shutdown()
+        onDispose { engine.stop(); engine.shutdown() }
+    }
+
+    startRecognizer = {
+        if (latestContinuous && !latestBusy) {
+            if (speechRecognizer == null) {
+                micStatus = "SPEECH RECOGNITION UNAVAILABLE"
+                continuousMode = false
+            } else {
+                try { speechRecognizer.startListening(recognitionIntent); micStatus = "LISTENING..." }
+                catch (_: Exception) {
+                    micStatus = "RESTARTING MICROPHONE..."
+                    mainHandler.postDelayed({ startRecognizer?.invoke() }, 900L)
+                }
+            }
         }
     }
 
-    val speechLauncher =
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.StartActivityForResult()
-        ) { result ->
-            if (result.resultCode == android.app.Activity.RESULT_OK) {
-                val spoken = result.data
-                    ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-                    ?.firstOrNull()
-
-                if (!spoken.isNullOrBlank() && userId.isNotBlank()) {
-                    message = spoken
-                    scope.launch {
-                        busy = true
-                        val answer = sendToWorker(userId, spoken, messages)
-                        reply = answer
-                        messages = messages + listOf(
-                            "You: $spoken",
-                            "Marcus: $answer"
-                        )
-                        tts?.speak(
-                            answer,
-                            TextToSpeech.QUEUE_FLUSH,
-                            null,
-                            "marcus_reply"
-                        )
-                        busy = false
+    DisposableEffect(speechRecognizer) {
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) { mainHandler.post { if (latestContinuous) micStatus = "LISTENING..." } }
+            override fun onBeginningOfSpeech() { mainHandler.post { if (latestContinuous) micStatus = "HEARING YOU..." } }
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() { mainHandler.post { if (latestContinuous) micStatus = "PROCESSING..." } }
+            override fun onError(error: Int) {
+                mainHandler.post {
+                    if (latestContinuous && !latestBusy) {
+                        micStatus = "RECONNECTING MICROPHONE..."
+                        speechRecognizer?.cancel()
+                        val delay = if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) 500L else 1200L
+                        mainHandler.postDelayed({ startRecognizer?.invoke() }, delay)
                     }
                 }
             }
-        }
-
-    val permissionLauncher =
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { granted ->
-            if (granted) {
-                val intent = Intent(
-                    RecognizerIntent.ACTION_RECOGNIZE_SPEECH
-                ).apply {
-                    putExtra(
-                        RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                    )
-                    putExtra(
-                        RecognizerIntent.EXTRA_LANGUAGE,
-                        Locale.getDefault()
-                    )
-                    putExtra(
-                        RecognizerIntent.EXTRA_PROMPT,
-                        "Speak to Marcus"
-                    )
+            override fun onResults(results: Bundle?) {
+                val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim()
+                mainHandler.post {
+                    if (!spoken.isNullOrBlank() && latestUserId.isNotBlank()) {
+                        message = spoken
+                        busy = true
+                        micStatus = "MARCUS IS THINKING..."
+                        scope.launch {
+                            val answer = sendToWorker(latestUserId, spoken, latestMessages)
+                            reply = answer
+                            messages = latestMessages + listOf("You: $spoken", "Marcus: $answer")
+                            busy = false
+                            val engine = latestTts
+                            if (engine != null) engine.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "marcus_reply")
+                            else if (latestContinuous) mainHandler.postDelayed({ startRecognizer?.invoke() }, 600L)
+                        }
+                    } else if (latestContinuous) {
+                        mainHandler.postDelayed({ startRecognizer?.invoke() }, 500L)
+                    }
                 }
-                speechLauncher.launch(intent)
             }
-        }
+            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+        onDispose { speechRecognizer?.cancel(); speechRecognizer?.destroy() }
+    }
 
-    fun startListening() {
-        if (!userId.matches(Regex("^[a-zA-Z0-9_-]{16,80}$"))) {
-            showIdDialog = true
-            return
-        }
-
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.RECORD_AUDIO
-        ) == PackageManager.PERMISSION_GRANTED
-
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
-            val intent = Intent(
-                RecognizerIntent.ACTION_RECOGNIZE_SPEECH
-            ).apply {
-                putExtra(
-                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                )
-                putExtra(
-                    RecognizerIntent.EXTRA_LANGUAGE,
-                    Locale.getDefault()
-                )
-                putExtra(
-                    RecognizerIntent.EXTRA_PROMPT,
-                    "Speak to Marcus"
-                )
-            }
-            speechLauncher.launch(intent)
+            continuousMode = true
+            micStatus = "STARTING MICROPHONE..."
+            mainHandler.postDelayed({ startRecognizer?.invoke() }, 300L)
         } else {
-            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            continuousMode = false
+            micStatus = "MICROPHONE PERMISSION DENIED"
         }
     }
 
+    fun stopContinuousListening() {
+        continuousMode = false
+        speechRecognizer?.cancel()
+        tts?.stop()
+        micStatus = "MICROPHONE STOPPED"
+    }
+
+    fun startListening() {
+        if (!userId.matches(Regex("^[a-zA-Z0-9_-]{16,80}$"))) { showIdDialog = true; return }
+        if (speechRecognizer == null) { micStatus = "SPEECH RECOGNITION UNAVAILABLE"; return }
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            continuousMode = true
+            micStatus = "STARTING MICROPHONE..."
+            startRecognizer?.invoke()
+        } else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    val lifecycleOwner = context as? LifecycleOwner
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                continuousMode = false
+                speechRecognizer?.cancel()
+                tts?.stop()
+                micStatus = "PAUSED — TAP START TO RESUME"
+            }
+        }
+        lifecycleOwner?.lifecycle?.addObserver(observer)
+        onDispose { lifecycleOwner?.lifecycle?.removeObserver(observer) }
+    }
     MaterialTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -269,7 +325,7 @@ fun MarcusApp() {
                                 contentAlignment = Alignment.Center
                             ) {
                                 Button(
-                                    onClick = { startListening() },
+                                    onClick = { if (continuousMode) stopContinuousListening() else startListening() },
                                     modifier = Modifier.size(112.dp),
                                     shape = CircleShape,
                                     colors = ButtonDefaults.buttonColors(
@@ -277,7 +333,7 @@ fun MarcusApp() {
                                     )
                                 ) {
                                     Text(
-                                        "â  â\nM",
+                                        if (continuousMode) "STOP\nM" else "START\nM",
                                         color = Color(0xFFFF334F),
                                         fontSize = 25.sp,
                                         fontWeight = FontWeight.Black,
@@ -291,13 +347,12 @@ fun MarcusApp() {
 
                         Text(
                             if (busy) "MARCUS IS THINKING..."
-                            else "TAP THE CORE TO SPEAK",
+                            else micStatus,
                             color = BlueColor,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         )
-
                         Spacer(Modifier.height(16.dp))
 
                         Card(
@@ -359,13 +414,13 @@ fun MarcusApp() {
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
-                            onClick = { startListening() },
+                            onClick = { if (continuousMode) stopContinuousListening() else startListening() },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = PanelColor
                             )
                         ) {
-                            Text("SPEAK", color = BlueColor)
+                            Text(if (continuousMode) "STOP LISTENING" else "START LISTENING", color = BlueColor)
                         }
 
                         Button(
