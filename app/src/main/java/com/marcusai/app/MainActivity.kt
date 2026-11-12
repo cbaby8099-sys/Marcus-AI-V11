@@ -88,7 +88,12 @@ private fun MarcusApp() {
     var showGaming by remember { mutableStateOf(false) }
     var showMemory by remember { mutableStateOf(false) }
     var chatMode by remember { mutableStateOf(true) }
-    var history by remember { mutableStateOf(listOf<String>()) }
+    var history by remember {
+        mutableStateOf(prefs.getString("chat_history", "").orEmpty().lines().filter { it.isNotBlank() }.takeLast(120))
+    }
+    LaunchedEffect(history) {
+        prefs.edit().putString("chat_history", history.takeLast(120).joinToString("\n")).apply()
+    }
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
 
     var recognizer by remember {
@@ -323,7 +328,7 @@ private fun MarcusApp() {
                 ) {
                     Column {
                         Text("MARCUS", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
-                        Text("PERSONAL AI  •  V100.1", color = palette.primary, fontSize = 9.sp, letterSpacing = 1.4.sp)
+                        Text("PERSONAL AI  •  V101", color = palette.primary, fontSize = 9.sp, letterSpacing = 1.4.sp)
                     }
                     Surface(
                         color = palette.surface,
@@ -642,6 +647,18 @@ private fun handleMarcusDeviceCommand(context: android.content.Context, raw: Str
             }.getOrElse { "I found ${app.second}, but Android wouldn't let me open it." }
         }
         return "I couldn't find an installed app matching \"$appRequest\". Tell me another part of its name, or check whether it is installed."
+    }
+
+    val webSearch = Regex(
+        """^(?:(?:hey\s+marcus|marcus)[,\s]+)?(?:please\s+)?(?:search (?:the )?(?:web|internet|google) for|google|look up)\s+(.+)$""",
+        RegexOption.IGNORE_CASE
+    ).find(original)?.groupValues?.get(1)?.trim()
+    if (!webSearch.isNullOrBlank()) {
+        val searchUri = Uri.parse("https://www.google.com/search?q=" + Uri.encode(webSearch))
+        return runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, searchUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            "Searching the web for: $webSearch"
+        }.getOrElse { "I couldn't open a browser to search for that." }
     }
 
     val typedText = Regex(
