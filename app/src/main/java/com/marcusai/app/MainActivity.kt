@@ -608,122 +608,92 @@ private fun sendMessage(
 
 
 private fun handleMarcusDeviceCommand(context: android.content.Context, raw: String): String? {
-    val command = raw.lowercase(Locale.US).trim().replace(Regex("[.!?]+$"), "")
-    val packageTargets = listOf(
-        Triple("whatsapp", "com.whatsapp", "WhatsApp"),
-        Triple("tiktok", "com.zhiliaoapp.musically", "TikTok"),
-        Triple("chrome", "com.android.chrome", "Chrome"),
-        Triple("youtube", "com.google.android.youtube", "YouTube"),
-        Triple("play store", "com.android.vending", "Google Play Store"),
-        Triple("metatrader 5", "net.metaquotes.metatrader5", "MetaTrader 5"),
-        Triple("mt5", "net.metaquotes.metatrader5", "MetaTrader 5")
-    )
-    val target = packageTargets.firstOrNull { command == "open ${it.first}" || command == "launch ${it.first}" || command == "start ${it.first}" }
-    if (target != null) {
-        val launch = context.packageManager.getLaunchIntentForPackage(target.second)
-        if (launch != null) {
-            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(launch)
-            return "Opening ${target.third}."
-        }
-        return "${target.third} is not installed or Android did not expose its launch activity."
-    }
-    val appPrefix = listOf("open ", "launch ", "start ").firstOrNull { command.startsWith(it) }
-    if (appPrefix != null) {
-        val requested = command.removePrefix(appPrefix).trim()
-        if (requested.isNotBlank()) {
-            val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-            val matches = runCatching { context.packageManager.queryIntentActivities(launcherIntent, 0) }.getOrDefault(emptyList())
-            val app = matches.firstOrNull {
-                it.loadLabel(context.packageManager).toString().lowercase(Locale.US) == requested
-            } ?: matches.firstOrNull {
-                it.loadLabel(context.packageManager).toString().lowercase(Locale.US).contains(requested)
+    val original = raw.trim()
+    val command = original.lowercase(Locale.US).replace(Regex("[.!?]+$"), "").trim()
+    if (command.isBlank()) return null
+
+    val openIntent = Regex(
+        """^(?:(?:hey\s+marcus|marcus)[,\s]+)?(?:(?:please|can you|could you|would you|i want you to|i need you to|help me to|help me)\s+)?(?:open|launch|start|bring up|go to|take me to|show me|pull up|load|run|use)\s+(.+?)(?:\s+for me)?$""",
+        RegexOption.IGNORE_CASE
+    ).find(original)
+    val appRequest = openIntent?.groupValues?.get(1)?.trim()?.trim('"', '\'', '.', '!', '?')
+    if (!appRequest.isNullOrBlank()) {
+        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val matches = runCatching { context.packageManager.queryIntentActivities(launcherIntent, 0) }.getOrDefault(emptyList())
+        val requested = appRequest.lowercase(Locale.US).removePrefix("the ")
+            .replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+        val app = matches.mapNotNull { info ->
+            val label = runCatching { info.loadLabel(context.packageManager).toString() }.getOrNull() ?: return@mapNotNull null
+            val normalized = label.lowercase(Locale.US).replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+            val score = when {
+                normalized == requested -> 100
+                normalized.contains(requested) || requested.contains(normalized) -> 80
+                requested.split(" ").all { it.length > 1 && normalized.contains(it) } -> 65
+                else -> 0
             }
-            if (app != null) {
-                val launch = context.packageManager.getLaunchIntentForPackage(app.activityInfo.packageName)
-                if (launch != null) {
-                    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(launch)
-                    return "Opening ${app.loadLabel(context.packageManager)}."
-                }
-            }
+            if (score > 0) Triple(info, label, score) else null
+        }.maxByOrNull { it.third }
+        if (app != null) {
+            val launch = context.packageManager.getLaunchIntentForPackage(app.first.activityInfo.packageName)
+            if (launch != null) return runCatching {
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(launch)
+                "Of course. Opening \${app.second} now."
+            }.getOrElse { "I found \${app.second}, but Android wouldn't let me open it." }
         }
+        return "I couldn't find an installed app matching \"$appRequest\". Tell me another part of its name, or check whether it is installed."
     }
-    val typedText = when {
-        command.startsWith("type ") -> raw.trim().substringAfter(" ", "")
-        command.startsWith("enter text ") -> raw.trim().substringAfter("enter text ", "")
-        else -> null
-    }
+
+    val typedText = Regex(
+        """^(?:(?:hey\s+marcus|marcus)[,\s]+)?(?:please\s+)?(?:type|write|enter|fill in|put|search for|look for|find)\s+(.+?)(?:\s+into the (?:search|text) (?:box|field))?$""",
+        RegexOption.IGNORE_CASE
+    ).find(original)?.groupValues?.get(1)?.trim()?.trim('"', '\'')
     if (typedText != null) {
-        if (typedText.isBlank()) return "Tell me what text to type, then select an editable field in the app."
+        if (typedText.isBlank()) return "What name or text would you like me to enter?"
         return if (MarcusAccessibilityService.typeTextIntoFocusedField(typedText)) {
-            "Typed the text into the focused field. I have not pressed Send or submitted the form."
+            "I've entered \"$typedText\" in the field you selected. Check the result before submitting or choosing anything."
         } else {
-            "I couldn't type there. Enable Marcus Control in Accessibility, tap an editable text field first, and make sure it isn't a password field."
+            "I understand—you want me to enter \"$typedText\". First open the app and tap its search or text field, then ask me again. I won't guess where to enter it."
         }
     }
-    return when (command) {
-        "what's on my screen", "whats on my screen", "read my screen", "describe my screen" -> {
-            val visible = MarcusAccessibilityService.readVisibleScreen()
-            if (visible.isBlank()) "I couldn't read visible screen text. Enable Marcus Control in Android Accessibility settings, then try again."
-            else "Visible screen text (read only):\n$visible"
-        }
-        "open settings", "open phone settings", "launch settings" -> {
+
+    if (command in listOf("what's on my screen", "whats on my screen", "read my screen", "describe my screen", "what is on my screen")) {
+        val visible = MarcusAccessibilityService.readVisibleScreen()
+        return if (visible.isBlank()) "I can't read the current screen. Make sure Marcus Control is enabled in Android Accessibility settings."
+        else "Here's the visible text I can read:\n$visible"
+    }
+
+    return when {
+        command in listOf("open settings", "open phone settings", "launch settings", "take me to settings") -> {
             context.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             "Opening Android Settings."
         }
-        "open wi-fi settings", "open wifi settings", "open wi fi settings" -> {
-            context.startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            "Opening Wi-Fi settings."
-        }
-        "open bluetooth settings" -> {
-            context.startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            "Opening Bluetooth settings."
-        }
-        "open display settings" -> {
-            context.startActivity(Intent(android.provider.Settings.ACTION_DISPLAY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            "Opening display settings."
-        }
-        "open sound settings" -> {
-            context.startActivity(Intent(android.provider.Settings.ACTION_SOUND_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            "Opening sound settings."
-        }
-        "go home", "press home", "show home screen" -> {
-            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)) "Going to the Home screen."
-            else "Phone navigation is not enabled yet. Open Android Settings > Accessibility > Installed apps > Marcus Control, then enable it."
-        }
-        "go back", "press back" -> {
-            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)) "Going back."
-            else "Phone navigation is not enabled yet. Enable Marcus Control in Android Settings > Accessibility > Installed apps."
-        }
-        "show recent apps", "open recent apps" -> {
-            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS)) "Showing recent apps."
-            else "Phone navigation is not enabled yet. Enable Marcus Control in Android Settings > Accessibility > Installed apps."
-        }
-        "show notifications", "open notifications" -> {
-            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)) "Opening notifications."
-            else "Enable Marcus Control in Android Settings > Accessibility > Installed apps first."
-        }
-        "open quick settings", "show quick settings" -> {
-            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS)) "Opening Quick Settings."
-            else "Enable Marcus Control in Android Settings > Accessibility > Installed apps first."
-        }
-        "open camera", "launch camera" -> {
+        command.contains("wi-fi settings") || command.contains("wifi settings") ->
+            { context.startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); "Opening Wi-Fi settings." }
+        command.contains("bluetooth settings") ->
+            { context.startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); "Opening Bluetooth settings." }
+        command in listOf("go home", "press home", "show home screen", "take me home") ->
+            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)) "Going to your Home screen." else "Enable Marcus Control in Android Accessibility settings first."
+        command in listOf("go back", "press back", "back") ->
+            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)) "Going back." else "Enable Marcus Control in Android Accessibility settings first."
+        command in listOf("show recent apps", "open recent apps") ->
+            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS)) "Showing recent apps." else "Enable Marcus Control in Android Accessibility settings first."
+        command in listOf("show notifications", "open notifications") ->
+            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)) "Opening notifications." else "Enable Marcus Control in Android Accessibility settings first."
+        command in listOf("open quick settings", "show quick settings") ->
+            if (MarcusAccessibilityService.perform(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS)) "Opening Quick Settings." else "Enable Marcus Control in Android Accessibility settings first."
+        command in listOf("open camera", "launch camera", "take a photo") -> {
             val camera = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            if (camera.resolveActivity(context.packageManager) != null) {
-                context.startActivity(camera)
-                "Opening Camera."
-            } else "No camera app is available."
+            if (camera.resolveActivity(context.packageManager) != null) { context.startActivity(camera); "Opening Camera." } else "No camera app is available."
         }
-        "open phone", "open dialer", "open calls" -> launchDeviceIntent(context, Intent(Intent.ACTION_DIAL), "Phone dialer")
-        "open messages", "open sms" -> launchDeviceIntent(context, Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MESSAGING), "Messages")
-        "open maps", "open navigation" -> launchDeviceIntent(context, Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=")), "Maps")
-        "open clock", "open alarm" -> launchDeviceIntent(context, Intent("android.intent.action.SHOW_ALARMS"), "Clock")
-        "open calendar" -> launchDeviceIntent(context, Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALENDAR), "Calendar")
+        command in listOf("open phone", "open dialer", "open calls", "show phone") -> launchDeviceIntent(context, Intent(Intent.ACTION_DIAL), "Phone dialer")
+        command in listOf("open messages", "open sms", "show messages") -> launchDeviceIntent(context, Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_MESSAGING), "Messages")
+        command in listOf("open maps", "open navigation", "show maps") -> launchDeviceIntent(context, Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:0,0?q=")), "Maps")
+        command in listOf("open clock", "open alarm", "show clock") -> launchDeviceIntent(context, Intent("android.intent.action.SHOW_ALARMS"), "Clock")
+        command in listOf("open calendar", "show calendar") -> launchDeviceIntent(context, Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALENDAR), "Calendar")
         else -> null
     }
 }
-
 
 private fun launchDeviceIntent(context: android.content.Context, intent: Intent, label: String): String {
     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
