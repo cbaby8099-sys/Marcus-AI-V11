@@ -11,6 +11,7 @@ on:
       - v15-eternal-darkness
       - v16-mic-control-themes
       - v19-robot-companion
+      - v53-communications-tycoon
 
 jobs:
   build:
@@ -42,12 +43,12 @@ jobs:
           sdkmanager "platforms;android-35"
           sdkmanager "build-tools;35.0.0"
 
-      - name: Build Marcus V52
+      - name: Build Marcus V53
         run: gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: marcus-ai-v52-copilot
+          name: marcus-ai-v53-communications-tycoon
           path: app/build/outputs/apk/debug/app-debug.apk
           

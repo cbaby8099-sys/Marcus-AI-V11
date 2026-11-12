@@ -191,7 +191,7 @@ private fun MarcusApp() {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("MARCUS", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                        Text("ROBOTIC CORE  •  V52", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
+                        Text("ROBOTIC CORE  •  V53", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showAppManager = !showAppManager; showSettings = false; showGaming = false; showMemory = false }) { Text("APPS", color = palette.accent, fontSize = 11.sp) }
@@ -230,7 +230,7 @@ private fun MarcusApp() {
                     FilterChip(selected = chatMode, onClick = { chatMode = true }, label = { Text("CHAT") })
                     FilterChip(selected = !chatMode, onClick = { chatMode = false }, label = { Text("VOICE") })
                     Spacer(Modifier.weight(1f))
-                    Text(if (busy) "THINKING…" else if (listening) "LISTENING…" else "ONLINE UI", color = palette.accent, fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterVertically))
+                    Text(if (busy) "CONNECTING…" else if (listening) "LISTENING…" else "READY", color = palette.accent, fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterVertically))
                 }
 
                 if (!chatMode) {
@@ -330,24 +330,57 @@ private fun sendMessage(
                     put("maxOutputTokens", 700)
                     put("systemPrompt", "You are Marcus, a capable, accurate and direct assistant with a dark, cinematic fictional persona. Be concise by default, answer the actual request first, use clear steps when needed, avoid filler, and ask only essential clarifying questions. Be honest about tool access and uncertainty. Never claim an action succeeded unless verified.")
                 }
-                val connection = (URL(WORKER_URL).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    connectTimeout = 8000
-                    readTimeout = 20000
-                    doOutput = true
-                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                var finalReply: String? = null
+                var finalError = "The AI server could not be reached. Check the connection and retry."
+                for (attempt in 0..1) {
+                    var connection: HttpURLConnection? = null
+                    try {
+                        connection = (URL(WORKER_URL).openConnection() as HttpURLConnection).apply {
+                            requestMethod = "POST"
+                            connectTimeout = 10000
+                            readTimeout = 30000
+                            doOutput = true
+                            useCaches = false
+                            setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                            setRequestProperty("Accept", "application/json")
+                        }
+                        connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+                        val status = connection.responseCode
+                        val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+                        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                        if (status in 500..599 && attempt == 0) {
+                            finalError = "Marcus server is temporarily unavailable (HTTP $status). Retrying once."
+                            Thread.sleep(700L)
+                            continue
+                        }
+                        if (status !in 200..299) {
+                            finalReply = when (status) {
+                                401, 403 -> "Marcus server rejected the request (HTTP $status). The server configuration may need attention."
+                                429 -> "Marcus AI is receiving too many requests. Wait a moment, then try again."
+                                in 500..599 -> "Marcus AI server is temporarily unavailable (HTTP $status). Please try again shortly."
+                                else -> "Marcus server returned HTTP $status. Please try again."
+                            }
+                            break
+                        }
+                        val json = runCatching { JSONObject(raw) }.getOrNull()
+                        finalReply = json?.optString("reply")?.takeIf { it.isNotBlank() && it != "null" }
+                            ?: json?.optString("response")?.takeIf { it.isNotBlank() && it != "null" }
+                            ?: json?.optString("message")?.takeIf { it.isNotBlank() && it != "null" }
+                            ?: if (raw.isNotBlank()) raw else "Marcus returned an empty response. Please retry."
+                        break
+                    } catch (e: java.net.SocketTimeoutException) {
+                        finalError = if (attempt == 0) "Marcus AI took too long to respond. Retrying once." else "Marcus AI timed out twice. Your internet may be fine; the AI server may be slow. Tap Send to try again."
+                        if (attempt == 0) Thread.sleep(700L)
+                    } catch (e: java.io.IOException) {
+                        finalError = if (attempt == 0) "Could not reach Marcus AI server. Retrying once." else "Could not reach Marcus AI server after two attempts. Check the server or try again shortly."
+                        if (attempt == 0) Thread.sleep(700L)
+                    } finally {
+                        connection?.disconnect()
+                    }
                 }
-                connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
-                val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
-                val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                connection.disconnect()
-                val json = runCatching { JSONObject(raw) }.getOrNull()
-                json?.optString("reply")?.takeIf { it.isNotBlank() && it != "null" }
-                    ?: json?.optString("response")?.takeIf { it.isNotBlank() && it != "null" }
-                    ?: json?.optString("message")?.takeIf { it.isNotBlank() && it != "null" }
-                    ?: if (raw.isNotBlank()) raw else "Marcus returned an empty response."
+                finalReply ?: finalError
             } catch (e: Exception) {
-                "Connection error: ${e.message ?: "Please try again."}"
+                "Marcus request failed: ${e.message ?: "Unknown network error"}. Please try again."
             }
         }
         updateAnswer(response)
