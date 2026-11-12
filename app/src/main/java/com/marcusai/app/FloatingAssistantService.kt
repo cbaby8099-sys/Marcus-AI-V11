@@ -9,6 +9,8 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.TextView
+import android.graphics.drawable.GradientDrawable
+import android.view.View
 
 /** Small, user-started floating shortcut. It only opens Marcus; it does not secretly control other apps. */
 class FloatingAssistantService : Service() {
@@ -22,14 +24,23 @@ class FloatingAssistantService : Service() {
         }
         if (bubble != null) return START_NOT_STICKY
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        val density = resources.displayMetrics.density
         val view = TextView(this).apply {
             text = "M"
-            textSize = 22f
+            textSize = 23f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
             setTextColor(android.graphics.Color.WHITE)
-            setBackgroundColor(android.graphics.Color.rgb(0, 150, 190))
             gravity = Gravity.CENTER
-            elevation = 12f
-            setPadding(22, 14, 22, 14)
+            elevation = 16f
+            contentDescription = "Open Marcus assistant"
+            setPadding((16 * density).toInt(), (16 * density).toInt(), (16 * density).toInt(), (16 * density).toInt())
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(android.graphics.Color.rgb(36, 215, 245), android.graphics.Color.rgb(12, 82, 126))
+            ).apply {
+                shape = GradientDrawable.OVAL
+                setStroke((2 * density).toInt(), android.graphics.Color.WHITE)
+            }
             setOnClickListener {
                 val launch = Intent(this@FloatingAssistantService, MainActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
