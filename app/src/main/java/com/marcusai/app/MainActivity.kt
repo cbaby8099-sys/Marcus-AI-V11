@@ -145,6 +145,14 @@ private fun MarcusApp() {
         if (granted) startMarcusListening() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
     }
 
+    LaunchedEffect(Unit) {
+        val host = context as? android.app.Activity
+        if (host?.intent?.getBooleanExtra("start_voice", false) == true) {
+            host.intent.removeExtra("start_voice")
+            requestMarcusMic()
+        }
+    }
+
     DisposableEffect(recognizer) {
         recognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) { listening = true }
