@@ -47,20 +47,29 @@ class VoiceWakeService : Service() {
             return START_NOT_STICKY
         }
         stopping = false
-        startForeground(NOTIFICATION_ID, notification())
+        try {
+            startForeground(NOTIFICATION_ID, notification())
+        } catch (_: SecurityException) {
+            stopSelf()
+            return START_NOT_STICKY
+        } catch (_: RuntimeException) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             stopSelf()
             return START_NOT_STICKY
         }
         startRecognition()
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun startRecognition() {
         if (stopping || restarting || !SpeechRecognizer.isRecognitionAvailable(this)) return
         restarting = true
         try {
-            recognizer?.destroy()
+            runCatching { recognizer?.cancel() }
+            runCatching { recognizer?.destroy() }
             recognizer = SpeechRecognizer.createSpeechRecognizer(this)
             recognizer?.setRecognitionListener(object : RecognitionListener {
                 override fun onReadyForSpeech(params: android.os.Bundle?) { restarting = false }
@@ -134,8 +143,8 @@ class VoiceWakeService : Service() {
     override fun onDestroy() {
         stopping = true
         handler.removeCallbacksAndMessages(null)
-        recognizer?.cancel()
-        recognizer?.destroy()
+        runCatching { recognizer?.cancel() }
+        runCatching { recognizer?.destroy() }
         recognizer = null
         super.onDestroy()
     }
