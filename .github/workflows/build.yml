@@ -13,6 +13,7 @@ on:
       - v19-robot-companion
       - v53-communications-tycoon
       - v100-unified-rebuild
+      - v101-stability-redesign
 
 jobs:
   build:
@@ -44,12 +45,12 @@ jobs:
           sdkmanager "platforms;android-35"
           sdkmanager "build-tools;35.0.0"
 
-      - name: Build Marcus V100
+      - name: Build Marcus V100.1 Stability
         run: gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: marcus-ai-v100-unified
+          name: marcus-ai-v1001-stability
           path: app/build/outputs/apk/debug/app-debug.apk
           
