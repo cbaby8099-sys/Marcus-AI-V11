@@ -107,7 +107,7 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
             SettingsChoice("Theme", theme, listOf("Eternal Darkness", "Titanium Cyan", "Neon Blue", "Stealth Graphite", "Arctic Silver", "Crimson Night", "Obsidian Gold", "Abyss Blue", "Toxic Green")) { theme = it }
         }
 
-        SettingsSection("PERMISSION CENTRE  •  V52") {
+        SettingsSection("PERMISSION CENTRE  •  V100.1") {
             var refreshKey by remember { mutableIntStateOf(0) }
             val micGranted = remember(refreshKey) {
                 androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -121,7 +121,7 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
                 android.os.Build.VERSION.SDK_INT < 33 ||
                     androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
             }
-            Text("Marcus does not need Display over other apps permission. Accessibility is optional and only needed for supported navigation and screen reading.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Text("The floating Marcus shortcut requires Display over other apps permission. Accessibility is optional and only needed for supported navigation, screen reading and text entry.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
             PermissionStatusRow("Accessibility • phone navigation", accessibilityGranted)
             PermissionStatusRow("Microphone • voice commands", micGranted)
             PermissionStatusRow("Notifications • status alerts", notificationsGranted)
@@ -137,7 +137,7 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
         }
 
         SettingsSection("APP & SECURITY") {
-            Text("Marcus V52 • Android edition", color = Color.White)
+            Text("Marcus V100.1 • Android edition", color = Color.White)
             Text("Never store API keys, passwords, broker credentials or recovery codes in chat history. Phone-control features require Android permissions and explicit confirmation.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
