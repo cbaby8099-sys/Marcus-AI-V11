@@ -78,6 +78,7 @@ private fun MarcusApp() {
     var answer by remember { mutableStateOf("I HAVE AWAKENED. SPEAK.") }
     var busy by remember { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
+    var recognitionInFlight by remember { mutableStateOf(false) }
     var continuousVoice by remember { mutableStateOf(false) }
     var voiceReplyPending by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
@@ -117,6 +118,9 @@ private fun MarcusApp() {
     }
 
     fun startMarcusListening() {
+        // SpeechRecognizer permits only one active request. Keep the session locked
+        // until Android returns onResults/onError, not merely until speech ends.
+        if (recognitionInFlight) return
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             listening = false
             answer = "Microphone permission is not granted. Allow it in Android App info > Permissions."
@@ -142,15 +146,18 @@ private fun MarcusApp() {
             }
             // Avoid cancelling a previous session immediately before starting another;
             // that cancel/start race can destabilize some Android speech providers.
+            recognitionInFlight = true
             listening = true
             speech.startListening(intent)
         } catch (e: RuntimeException) {
+            recognitionInFlight = false
             listening = false
             answer = "Microphone could not start (${e.javaClass.simpleName}). Check Android microphone access and speech services."
             runCatching { speech.cancel() }
             runCatching { speech.destroy() }
             recognizer = null
         } catch (e: Exception) {
+            recognitionInFlight = false
             listening = false
             answer = "Microphone error: ${e.message ?: "speech service unavailable"}"
             runCatching { speech.cancel() }
@@ -191,6 +198,7 @@ private fun MarcusApp() {
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() { listening = false }
                     override fun onError(error: Int) {
+                        recognitionInFlight = false
                         listening = false
                         answer = when (error) {
                             SpeechRecognizer.ERROR_AUDIO -> "Microphone audio error. Check that another app is not using the microphone."
@@ -219,6 +227,7 @@ private fun MarcusApp() {
                         }
                     }
                     override fun onResults(results: Bundle?) {
+                        recognitionInFlight = false
                         listening = false
                         val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
                         if (!spoken.isNullOrBlank()) {
@@ -440,6 +449,7 @@ private fun MarcusApp() {
                             if (continuousVoice) {
                                 continuousVoice = false
                                 voiceReplyPending = false
+                                recognitionInFlight = false
                                 listening = false
                                 runCatching { recognizer?.cancel() }
                                 answer = "Continuous voice paused."
