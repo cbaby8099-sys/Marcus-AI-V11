@@ -1,4 +1,3 @@
-
 package com.marcusai.app
 
 import android.Manifest
@@ -7,8 +6,8 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.speech.RecognizerIntent
 import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -16,6 +15,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,11 +30,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -43,14 +49,15 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.util.UUID
 
-private const val WORKER_URL =
-    "https://marcus-ai.cbaby8099.workers.dev"
-
-private val BackgroundColor = Color(0xFF050509)
-private val BlueColor = Color(0xFF168BFF)
-private val RedColor = Color(0xFFB00020)
-private val PanelColor = Color(0xFF15121B)
+private const val WORKER_URL = "https://marcus-ai.cbaby8099.workers.dev"
+private val Ink = Color(0xFF080B14)
+private val Panel = Color(0xFF121A2B)
+private val Blue = Color(0xFF58B8FF)
+private val Violet = Color(0xFF9A82FF)
+private val Muted = Color(0xFF9AA8BE)
+private val White = Color(0xFFF3F7FF)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,37 +70,41 @@ class MainActivity : ComponentActivity() {
 fun MarcusApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val prefs = remember { context.getSharedPreferences("marcus_user_id", 0) }
 
-    val prefs = remember {
-        context.getSharedPreferences("marcus_user_id", 0)
-    }
-
+    // New installs receive a private local app identity automatically.
+    // Users can optionally link an existing V10 identity to recover its cloud memory.
     var userId by remember {
-        mutableStateOf(prefs.getString("userId", "") ?: "")
+        mutableStateOf(
+            prefs.getString("userId", null)
+                ?: UUID.randomUUID().toString().replace("-", "")
+        )
     }
+    LaunchedEffect(userId) { prefs.edit().putString("userId", userId).apply() }
 
     var idInput by remember { mutableStateOf("") }
-    var showIdDialog by remember { mutableStateOf(userId.isBlank()) }
+    var showIdDialog by remember { mutableStateOf(false) }
     var idError by remember { mutableStateOf(false) }
-
     var message by remember { mutableStateOf("") }
-    var reply by remember {
-        mutableStateOf("Marcus is awake. The connection is waiting.")
-    }
+    var reply by remember { mutableStateOf("Marcus is online. Start a conversation whenever you're ready.") }
     var busy by remember { mutableStateOf(false) }
     var chatMode by remember { mutableStateOf(false) }
     var messages by remember { mutableStateOf(listOf<String>()) }
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
     var continuousMode by remember { mutableStateOf(false) }
-    var micStatus by remember { mutableStateOf("READY") }
+    var micStatus by remember { mutableStateOf("VOICE SYSTEM READY") }
+
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val latestContinuous by rememberUpdatedState(continuousMode)
     val latestBusy by rememberUpdatedState(busy)
     val latestUserId by rememberUpdatedState(userId)
     val latestMessages by rememberUpdatedState(messages)
     val latestTts by rememberUpdatedState(tts)
+
     val speechRecognizer = remember(context) {
-        if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
+        if (SpeechRecognizer.isRecognitionAvailable(context)) {
+            SpeechRecognizer.createSpeechRecognizer(context)
+        } else null
     }
     var startRecognizer by remember { mutableStateOf<(() -> Unit)?>(null) }
     val recognitionIntent = remember {
@@ -101,6 +112,7 @@ fun MarcusApp() {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
         }
     }
 
@@ -109,30 +121,37 @@ fun MarcusApp() {
         engine = TextToSpeech(context) { result ->
             if (result == TextToSpeech.SUCCESS) {
                 engine.language = Locale.UK
-                engine.setSpeechRate(1.05f)
+                engine.setSpeechRate(1.15f)
                 engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {
-                        mainHandler.post { micStatus = "MARCUS IS SPEAKING..." }
+                        mainHandler.post { micStatus = "MARCUS IS SPEAKING" }
                     }
                     override fun onDone(utteranceId: String?) {
                         mainHandler.post {
                             if (latestContinuous && !latestBusy) {
-                                micStatus = "LISTENING..."
-                                mainHandler.postDelayed({ startRecognizer?.invoke() }, 400L)
-                            } else if (!latestContinuous) micStatus = "READY"
+                                micStatus = "LISTENING FOR YOU"
+                                mainHandler.postDelayed({ startRecognizer?.invoke() }, 350L)
+                            } else if (!latestContinuous) {
+                                micStatus = "VOICE SYSTEM READY"
+                            }
                         }
                     }
                     @Deprecated("Deprecated in Java")
                     override fun onError(utteranceId: String?) {
                         mainHandler.post {
-                            if (latestContinuous && !latestBusy) mainHandler.postDelayed({ startRecognizer?.invoke() }, 800L)
+                            if (latestContinuous && !latestBusy) {
+                                mainHandler.postDelayed({ startRecognizer?.invoke() }, 700L)
+                            }
                         }
                     }
                 })
             }
         }
         tts = engine
-        onDispose { engine.stop(); engine.shutdown() }
+        onDispose {
+            engine.stop()
+            engine.shutdown()
+        }
     }
 
     startRecognizer = {
@@ -141,9 +160,11 @@ fun MarcusApp() {
                 micStatus = "SPEECH RECOGNITION UNAVAILABLE"
                 continuousMode = false
             } else {
-                try { speechRecognizer.startListening(recognitionIntent); micStatus = "LISTENING..." }
-                catch (_: Exception) {
-                    micStatus = "RESTARTING MICROPHONE..."
+                try {
+                    speechRecognizer.startListening(recognitionIntent)
+                    micStatus = "LISTENING FOR YOU"
+                } catch (_: Exception) {
+                    micStatus = "RESTARTING VOICE"
                     mainHandler.postDelayed({ startRecognizer?.invoke() }, 900L)
                 }
             }
@@ -152,52 +173,71 @@ fun MarcusApp() {
 
     DisposableEffect(speechRecognizer) {
         speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) { mainHandler.post { if (latestContinuous) micStatus = "LISTENING..." } }
-            override fun onBeginningOfSpeech() { mainHandler.post { if (latestContinuous) micStatus = "HEARING YOU..." } }
+            override fun onReadyForSpeech(params: Bundle?) {
+                mainHandler.post { if (latestContinuous) micStatus = "LISTENING FOR YOU" }
+            }
+            override fun onBeginningOfSpeech() {
+                mainHandler.post { if (latestContinuous) micStatus = "HEARING YOU" }
+            }
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() { mainHandler.post { if (latestContinuous) micStatus = "PROCESSING..." } }
+            override fun onEndOfSpeech() {
+                mainHandler.post { if (latestContinuous) micStatus = "PROCESSING YOUR MESSAGE" }
+            }
             override fun onError(error: Int) {
                 mainHandler.post {
                     if (latestContinuous && !latestBusy) {
-                        micStatus = "RECONNECTING MICROPHONE..."
+                        micStatus = "RECONNECTING VOICE"
                         speechRecognizer?.cancel()
-                        val delay = if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) 500L else 1200L
+                        val delay = if (
+                            error == SpeechRecognizer.ERROR_NO_MATCH ||
+                            error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                        ) 450L else 1100L
                         mainHandler.postDelayed({ startRecognizer?.invoke() }, delay)
                     }
                 }
             }
             override fun onResults(results: Bundle?) {
-                val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim()
+                val spoken = results
+                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()?.trim()
                 mainHandler.post {
-                    if (!spoken.isNullOrBlank() && latestUserId.isNotBlank()) {
-                        message = spoken
+                    if (!spoken.isNullOrBlank() && latestContinuous && !latestBusy) {
                         busy = true
-                        micStatus = "MARCUS IS THINKING..."
+                        message = spoken
+                        micStatus = "MARCUS IS THINKING"
                         scope.launch {
                             val answer = sendToWorker(latestUserId, spoken, latestMessages)
                             reply = answer
-                            messages = latestMessages + listOf("You: $spoken", "Marcus: $answer")
+                            messages = (latestMessages + listOf("You: $spoken", "Marcus: $answer")).takeLast(30)
                             busy = false
                             val engine = latestTts
-                            if (engine != null) engine.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "marcus_reply")
-                            else if (latestContinuous) mainHandler.postDelayed({ startRecognizer?.invoke() }, 600L)
+                            if (engine != null) {
+                                engine.speak(answer, TextToSpeech.QUEUE_FLUSH, null, UUID.randomUUID().toString())
+                            } else if (latestContinuous) {
+                                mainHandler.postDelayed({ startRecognizer?.invoke() }, 500L)
+                            }
                         }
-                    } else if (latestContinuous) {
-                        mainHandler.postDelayed({ startRecognizer?.invoke() }, 500L)
+                    } else if (latestContinuous && !latestBusy) {
+                        mainHandler.postDelayed({ startRecognizer?.invoke() }, 450L)
                     }
                 }
             }
             override fun onPartialResults(partialResults: Bundle?) {}
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
-        onDispose { speechRecognizer?.cancel(); speechRecognizer?.destroy() }
+        onDispose {
+            speechRecognizer?.cancel()
+            speechRecognizer?.destroy()
+        }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
         if (granted) {
             continuousMode = true
-            micStatus = "STARTING MICROPHONE..."
+            micStatus = "STARTING VOICE"
             mainHandler.postDelayed({ startRecognizer?.invoke() }, 300L)
         } else {
             continuousMode = false
@@ -205,22 +245,44 @@ fun MarcusApp() {
         }
     }
 
-    fun stopContinuousListening() {
+    fun stopListening() {
         continuousMode = false
         speechRecognizer?.cancel()
         tts?.stop()
-        micStatus = "MICROPHONE STOPPED"
+        micStatus = "VOICE PAUSED"
     }
 
     fun startListening() {
-        if (!userId.matches(Regex("^[a-zA-Z0-9_-]{16,80}$"))) { showIdDialog = true; return }
-        if (speechRecognizer == null) { micStatus = "SPEECH RECOGNITION UNAVAILABLE"; return }
-        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (speechRecognizer == null) {
+            micStatus = "SPEECH RECOGNITION UNAVAILABLE"
+            return
+        }
+        val granted = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
         if (granted) {
             continuousMode = true
-            micStatus = "STARTING MICROPHONE..."
-            startRecognizer?.invoke()
-        } else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            micStatus = "STARTING VOICE"
+            mainHandler.postDelayed({ startRecognizer?.invoke() }, 120L)
+        } else {
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    fun submitMessage() {
+        val sent = message.trim()
+        if (sent.isNotEmpty() && !busy) {
+            busy = true
+            messages = (messages + "You: $sent").takeLast(30)
+            message = ""
+            scope.launch {
+                val answer = sendToWorker(userId, sent, messages)
+                reply = answer
+                messages = (messages + "Marcus: $answer").takeLast(30)
+                busy = false
+                tts?.speak(answer, TextToSpeech.QUEUE_FLUSH, null, UUID.randomUUID().toString())
+            }
+        }
     }
 
     val lifecycleOwner = context as? LifecycleOwner
@@ -230,65 +292,83 @@ fun MarcusApp() {
                 continuousMode = false
                 speechRecognizer?.cancel()
                 tts?.stop()
-                micStatus = "PAUSED — TAP START TO RESUME"
+                micStatus = "PAUSED — RETURN TO RESUME"
             }
         }
         lifecycleOwner?.lifecycle?.addObserver(observer)
         onDispose { lifecycleOwner?.lifecycle?.removeObserver(observer) }
     }
-    MaterialTheme {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = BackgroundColor
+
+    val pulse = rememberInfiniteTransition(label = "marcus-pulse").animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.045f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1250),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "core-scale"
+    )
+
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            primary = Blue,
+            secondary = Violet,
+            background = Ink,
+            surface = Panel,
+            onPrimary = Ink,
+            onBackground = White,
+            onSurface = White
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF111A30), Ink, Color(0xFF090D18))
+                    )
+                )
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp),
+                modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text(
-                            "MARCUS",
-                            color = Color.White,
-                            fontSize = 23.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                        Text(
-                            "POSSESSED AI",
-                            color = RedColor,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 3.sp
-                        )
+                        Text("MARCUS", color = White, fontSize = 25.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
+                        Text("PERSONAL AI  •  V1000", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
                     }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = {
-                            idInput = ""
-                            showIdDialog = true
-                        }) {
-                            Text("LINK ID", color = RedColor, fontSize = 11.sp)
-                        }
-
-                        TextButton(onClick = {
-                            chatMode = !chatMode
-                        }) {
-                            Text(
-                                if (chatMode) "VOICE" else "CHAT",
-                                color = BlueColor,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                    TextButton(onClick = {
+                        idInput = ""
+                        showIdDialog = true
+                    }) {
+                        Text("ACCOUNT", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(18.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .background(Color(0xFF17243A), RoundedCornerShape(50))
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Box(Modifier.size(7.dp).background(if (busy) Violet else Blue, CircleShape))
+                    Spacer(Modifier.width(9.dp))
+                    Text(
+                        if (busy) "THINKING" else micStatus,
+                        color = White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
+                    )
+                }
 
                 if (!chatMode) {
                     Column(
@@ -296,227 +376,164 @@ fun MarcusApp() {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Text(
-                            "THE ENTITY IS AWAKE",
-                            color = RedColor,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 2.sp
-                        )
-
-                        Spacer(Modifier.height(18.dp))
-
+                        Text("YOUR AI CO-PILOT", color = Muted, fontSize = 11.sp, letterSpacing = 2.2.sp)
+                        Spacer(Modifier.height(28.dp))
                         Box(
-                            modifier = Modifier
-                                .size(158.dp)
-                                .background(
-                                    RedColor.copy(alpha = 0.12f),
-                                    CircleShape
-                                ),
+                            modifier = Modifier.size(226.dp)
+                                .background(Blue.copy(alpha = 0.055f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Box(
-                                modifier = Modifier
-                                    .size(138.dp)
-                                    .background(
-                                        BlueColor.copy(alpha = 0.20f),
-                                        CircleShape
-                                    ),
+                                modifier = Modifier.size(190.dp)
+                                    .background(Violet.copy(alpha = 0.09f), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Button(
-                                    onClick = { if (continuousMode) stopContinuousListening() else startListening() },
-                                    modifier = Modifier.size(112.dp),
-                                    shape = CircleShape,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF170D19)
-                                    )
+                                Box(
+                                    modifier = Modifier.size(154.dp)
+                                        .graphicsLayer {
+                                            val scale = if (continuousMode) pulse.value else 1f
+                                            scaleX = scale
+                                            scaleY = scale
+                                        }
+                                        .background(
+                                            Brush.linearGradient(listOf(Blue, Violet, Color(0xFF263F75))),
+                                            CircleShape
+                                        )
+                                        .padding(3.dp)
+                                        .background(Color(0xFF10192B), CircleShape),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        if (continuousMode) "STOP\nM" else "START\nM",
-                                        color = Color(0xFFFF334F),
-                                        fontSize = 25.sp,
-                                        fontWeight = FontWeight.Black,
-                                        lineHeight = 34.sp
-                                    )
+                                    Button(
+                                        onClick = { if (continuousMode) stopListening() else startListening() },
+                                        modifier = Modifier.size(122.dp),
+                                        shape = CircleShape,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (continuousMode) Color(0xFF542B54) else Color(0xFF183B62)
+                                        )
+                                    ) {
+                                        Text(
+                                            if (continuousMode) "STOP" else "TALK",
+                                            color = White,
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Black,
+                                            letterSpacing = 2.sp
+                                        )
+                                    }
                                 }
                             }
                         }
-
-                        Spacer(Modifier.height(16.dp))
-
+                        Spacer(Modifier.height(26.dp))
                         Text(
-                            if (busy) "MARCUS IS THINKING..."
-                            else micStatus,
-                            color = BlueColor,
+                            if (continuousMode) "MARCUS IS LISTENING" else "TAP TALK TO START",
+                            color = Blue,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                            letterSpacing = 1.4.sp
                         )
                         Spacer(Modifier.height(16.dp))
-
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = PanelColor
-                            ),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = Panel.copy(alpha = 0.96f))
                         ) {
-                            Text(
-                                reply,
-                                modifier = Modifier.padding(14.dp),
-                                color = Color.White,
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(messages) { item ->
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = PanelColor
-                                ),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text(
-                                    item,
-                                    modifier = Modifier.padding(12.dp),
-                                    color = Color.White,
-                                    fontSize = 14.sp
-                                )
+                            Column(Modifier.padding(18.dp)) {
+                                Text("LATEST RESPONSE", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                                Spacer(Modifier.height(8.dp))
+                                Text(reply, color = White, fontSize = 15.sp, lineHeight = 22.sp)
                             }
                         }
                     }
-
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { chatMode = true },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp)
+                        ) { Text("OPEN CHAT", color = Blue, fontWeight = FontWeight.Bold) }
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    busy = true
+                                    reply = requestWorker(userId, "get_memory")
+                                    busy = false
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            enabled = !busy
+                        ) { Text("MEMORY", color = Violet, fontWeight = FontWeight.Bold) }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(9.dp)
+                    ) {
+                        items(messages) { item ->
+                            val isUser = item.startsWith("You:")
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isUser) Color(0xFF173454) else Panel
+                                )
+                            ) {
+                                Text(item, modifier = Modifier.padding(14.dp), color = White, fontSize = 14.sp, lineHeight = 20.sp)
+                            }
+                        }
+                    }
                     OutlinedTextField(
                         value = message,
                         onValueChange = { message = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Message Marcus...") },
+                        placeholder = { Text("Message Marcus...", color = Muted) },
+                        shape = RoundedCornerShape(16.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = BlueColor,
-                            unfocusedBorderColor = RedColor
+                            focusedTextColor = White,
+                            unfocusedTextColor = White,
+                            focusedBorderColor = Blue,
+                            unfocusedBorderColor = Muted
                         )
                     )
-
                     Spacer(Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { if (continuousMode) stopListening() else startListening() },
+                            modifier = Modifier.weight(1f)
+                        ) { Text(if (continuousMode) "STOP VOICE" else "VOICE", color = Violet) }
                         Button(
-                            onClick = { if (continuousMode) stopContinuousListening() else startListening() },
+                            onClick = { submitMessage() },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PanelColor
-                            )
-                        ) {
-                            Text(if (continuousMode) "STOP LISTENING" else "START LISTENING", color = BlueColor)
-                        }
-
-                        Button(
-                            onClick = {
-                                val sent = message.trim()
-                                if (userId.isBlank()) {
-                                    showIdDialog = true
-                                } else if (sent.isNotEmpty() && !busy) {
-                                    scope.launch {
-                                        busy = true
-                                        messages = messages + "You: $sent"
-                                        message = ""
-
-                                        val answer = sendToWorker(
-                                            userId,
-                                            sent,
-                                            messages
-                                        )
-
-                                        messages = messages + "Marcus: $answer"
-                                        reply = answer
-                                        tts?.speak(
-                                            answer,
-                                            TextToSpeech.QUEUE_FLUSH,
-                                            null,
-                                            "marcus_chat"
-                                        )
-                                        busy = false
-                                    }
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = BlueColor
-                            )
-                        ) {
-                            Text("SEND")
-                        }
+                            enabled = message.isNotBlank() && !busy
+                        ) { Text("SEND") }
                     }
+                    TextButton(onClick = { chatMode = false }) { Text("BACK TO VOICE", color = Blue) }
                 }
-
-                Spacer(Modifier.height(8.dp))
-
-                OutlinedButton(
-                    onClick = {
-                        if (userId.isBlank()) {
-                            showIdDialog = true
-                        } else if (!busy) {
-                            scope.launch {
-                                busy = true
-                                reply = requestWorker(userId, "get_memory")
-                                busy = false
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = BlueColor
-                    )
-                ) {
-                    Text("MEMORY")
-                }
+                Text("PRIVATE SESSION  •  VOICE PAUSES WHEN APP LEAVES FOREGROUND", color = Muted, fontSize = 8.sp, letterSpacing = 0.7.sp)
             }
         }
 
         if (showIdDialog) {
             AlertDialog(
                 onDismissRequest = { showIdDialog = false },
-                title = {
-                    Text("CONNECT MARCUS", color = Color.White)
-                },
+                title = { Text("LINK EXISTING ACCOUNT", color = White) },
                 text = {
                     Column {
                         Text(
-                            "Paste your copied V10 ID here. It stays on this device.",
-                            color = Color.LightGray
+                            "Optional: paste your previous Marcus V10 account ID to reconnect its saved cloud memory. You do not need a government ID.",
+                            color = Muted
                         )
                         Spacer(Modifier.height(12.dp))
                         OutlinedTextField(
                             value = idInput,
-                            onValueChange = {
-                                idInput = it.trim()
-                                idError = false
-                            },
+                            onValueChange = { idInput = it.trim(); idError = false },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            label = { Text("V10 User ID") },
+                            label = { Text("Previous Marcus account ID") },
                             isError = idError
                         )
-                        if (idError) {
-                            Text(
-                                "That ID format is not valid. Copy it again from ID Finder.",
-                                color = Color.Red,
-                                fontSize = 12.sp
-                            )
-                        }
+                        if (idError) Text("That account ID format is not valid.", color = Color.Red, fontSize = 12.sp)
                     }
                 },
                 confirmButton = {
@@ -527,55 +544,40 @@ fun MarcusApp() {
                             prefs.edit().putString("userId", cleanId).apply()
                             showIdDialog = false
                             idError = false
-                            reply = "Marcus is connected to your V10 identity."
+                            reply = "Previous Marcus account linked."
                         } else {
                             idError = true
                         }
-                    }) {
-                        Text("SAVE ID", color = BlueColor)
-                    }
+                    }) { Text("LINK ACCOUNT", color = Blue) }
                 },
                 dismissButton = {
-                    TextButton(onClick = {
-                        showIdDialog = false
-                    }) {
-                        Text("LATER", color = RedColor)
-                    }
+                    TextButton(onClick = { showIdDialog = false }) { Text("CANCEL", color = Muted) }
                 },
-                containerColor = PanelColor
+                containerColor = Panel
             )
         }
     }
 }
 
-suspend fun sendToWorker(
-    userId: String,
-    message: String,
-    history: List<String>
-): String {
+suspend fun sendToWorker(userId: String, message: String, history: List<String>): String {
     return withContext(Dispatchers.IO) {
         try {
             val historyArray = JSONArray()
             history.takeLast(12).forEach { historyArray.put(it) }
-
             val data = JSONObject().apply {
                 put("action", "chat")
                 put("userId", userId)
                 put("message", message)
                 put("history", historyArray)
             }
-
             postToWorker(data)
         } catch (e: Exception) {
-            "Connection error: ${e.message}"
+            "Connection error: ${e.message ?: "Please try again."}"
         }
     }
 }
 
-suspend fun requestWorker(
-    userId: String,
-    action: String
-): String {
+suspend fun requestWorker(userId: String, action: String): String {
     return withContext(Dispatchers.IO) {
         try {
             val data = JSONObject().apply {
@@ -584,43 +586,28 @@ suspend fun requestWorker(
             }
             postToWorker(data)
         } catch (e: Exception) {
-            
-            "Memory connection error: ${e.message}"
+            "Memory connection error: ${e.message ?: "Please try again."}"
         }
     }
 }
 
 private fun postToWorker(data: JSONObject): String {
-    val connection = URL(WORKER_URL)
-        .openConnection() as HttpURLConnection
-
+    val connection = URL(WORKER_URL).openConnection() as HttpURLConnection
     return try {
         connection.requestMethod = "POST"
-        connection.connectTimeout = 8000
-        connection.readTimeout = 15000
+        connection.connectTimeout = 6000
+        connection.readTimeout = 12000
         connection.doOutput = true
         connection.useCaches = false
-        connection.setRequestProperty(
-            "Content-Type",
-            "application/json"
-        )
-
-        connection.outputStream.use {
-            it.write(data.toString().toByteArray(Charsets.UTF_8))
-        }
-
-        val stream = if (connection.responseCode in 200..299) {
-            connection.inputStream
-        } else {
-            connection.errorStream
-        }
-
-        val response = stream.bufferedReader().use { it.readText() }
+        connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+        connection.outputStream.use { it.write(data.toString().toByteArray(Charsets.UTF_8)) }
+        val responseCode = connection.responseCode
+        val stream = if (responseCode in 200..299) connection.inputStream else connection.errorStream
+        val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (response.isBlank()) return "Marcus received an empty response. Please try again."
         val json = JSONObject(response)
-
         when {
-            json.has("error") ->
-                "Connection error: " + json.optString("error")
+            json.has("error") -> "Connection error: " + json.optString("error")
             json.has("reply") -> json.optString("reply")
             json.has("response") -> json.optString("response")
             else -> response
