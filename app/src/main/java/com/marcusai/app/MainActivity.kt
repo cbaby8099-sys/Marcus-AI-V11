@@ -638,8 +638,8 @@ private fun handleMarcusDeviceCommand(context: android.content.Context, raw: Str
             if (launch != null) return runCatching {
                 launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(launch)
-                "Of course. Opening \${app.second} now."
-            }.getOrElse { "I found \${app.second}, but Android wouldn't let me open it." }
+                "Of course. Opening ${app.second} now."
+            }.getOrElse { "I found ${app.second}, but Android wouldn't let me open it." }
         }
         return "I couldn't find an installed app matching \"$appRequest\". Tell me another part of its name, or check whether it is installed."
     }
