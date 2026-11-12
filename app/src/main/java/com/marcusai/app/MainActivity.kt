@@ -505,7 +505,7 @@ fun MarcusApp() {
                 Text("PRIVATE SESSION  •  VOICE PAUSES WHEN APP LEAVES FOREGROUND", color = Muted, fontSize = 8.sp, letterSpacing = 0.7.sp)
             }
         }
-
+    }
 }
 
 @Composable
