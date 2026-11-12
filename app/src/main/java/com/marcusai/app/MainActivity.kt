@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -77,6 +78,8 @@ private fun MarcusApp() {
     var answer by remember { mutableStateOf("I HAVE AWAKENED. SPEAK.") }
     var busy by remember { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
+    var continuousVoice by remember { mutableStateOf(false) }
+    var voiceReplyPending by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var themeName by remember { mutableStateOf(context.getSharedPreferences("marcus_config_v15", 0).getString("theme", "Eternal Darkness") ?: "Eternal Darkness") }
     val palette = remember(themeName) { MarcusThemePalette.from(themeName) }
@@ -193,10 +196,16 @@ private fun MarcusApp() {
                             SpeechRecognizer.ERROR_AUDIO -> "Microphone audio error. Check that another app is not using the microphone."
                             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is missing. Enable it in Android App info."
                             SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech provider network error. Check your connection or enable an offline speech pack."
-                            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "I didn't catch that. Tap the microphone and speak again."
+                            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> if (continuousVoice) "I’m still here. Go ahead when you’re ready." else "I didn't catch that. Tap the microphone and speak again."
                             SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Microphone is busy. Wait a moment and try again."
                             SpeechRecognizer.ERROR_CLIENT -> "Speech session stopped. Tap the microphone to start a fresh session."
                             else -> "Speech recognition error ($error). Try again."
+                        }
+                        if (continuousVoice && error in listOf(SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT, SpeechRecognizer.ERROR_RECOGNIZER_BUSY, SpeechRecognizer.ERROR_CLIENT)) {
+                            scope.launch {
+                                delay(if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1800L else 850L)
+                                if (continuousVoice && !busy) startMarcusListening()
+                            }
                         }
                         if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) {
                             runCatching {
@@ -212,7 +221,15 @@ private fun MarcusApp() {
                     override fun onResults(results: Bundle?) {
                         listening = false
                         val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                        if (!spoken.isNullOrBlank()) sendMessage(spoken, userId, history, { history = it }, { answer = it }, { busy = it }, scope, tts, context)
+                        if (!spoken.isNullOrBlank()) {
+                            voiceReplyPending = continuousVoice
+                            sendMessage(spoken, userId, history, { history = it }, { answer = it }, { busy = it }, scope, tts, context)
+                        } else if (continuousVoice) {
+                            scope.launch {
+                                delay(700L)
+                                if (continuousVoice && !busy) startMarcusListening()
+                            }
+                        }
                     }
                     override fun onPartialResults(partialResults: Bundle?) {}
                     override fun onEvent(eventType: Int, params: Bundle?) {}
@@ -227,6 +244,16 @@ private fun MarcusApp() {
                 runCatching { activeRecognizer.cancel() }
                 runCatching { activeRecognizer.destroy() }
             }
+        }
+    }
+
+    LaunchedEffect(voiceReplyPending, busy, answer, continuousVoice) {
+        if (voiceReplyPending && !busy) {
+            // Let Marcus finish speaking before reopening the microphone, so it does not hear its own reply.
+            val pauseMs = (answer.length * 55L + 900L).coerceIn(1400L, 12000L)
+            delay(pauseMs)
+            if (continuousVoice && voiceReplyPending && !busy) startMarcusListening()
+            voiceReplyPending = false
         }
     }
 
@@ -410,9 +437,20 @@ private fun MarcusApp() {
                         Text(answer, color = Color.White, modifier = Modifier.fillMaxWidth().background(palette.surface, RoundedCornerShape(16.dp)).padding(16.dp))
                         Spacer(Modifier.height(12.dp))
                         Button(onClick = {
-                                            requestMarcusMic()
-                        }, Modifier.fillMaxWidth()) { Text(if (listening) "LISTENING…" else "SPEAK TO MARCUS") }
-                        OutlinedButton(onClick = { tts?.stop() }, Modifier.fillMaxWidth()) { Text("STOP VOICE") }
+                            if (continuousVoice) {
+                                continuousVoice = false
+                                voiceReplyPending = false
+                                listening = false
+                                runCatching { recognizer?.cancel() }
+                                answer = "Continuous voice paused."
+                            } else {
+                                continuousVoice = true
+                                requestMarcusMic()
+                            }
+                        }, Modifier.fillMaxWidth()) {
+                            Text(if (continuousVoice) "STOP LISTENING" else "START CONTINUOUS VOICE")
+                        }
+                        OutlinedButton(onClick = { tts?.stop() }, Modifier.fillMaxWidth()) { Text("STOP MARCUS SPEAKING") }
                     }
                 } else {
                     LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
