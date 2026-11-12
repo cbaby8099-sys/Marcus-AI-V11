@@ -42,12 +42,12 @@ jobs:
           sdkmanager "platforms;android-35"
           sdkmanager "build-tools;35.0.0"
 
-      - name: Build Marcus V50
+      - name: Build Marcus V52
         run: gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: marcus-ai-v50-premium
+          name: marcus-ai-v52-copilot
           path: app/build/outputs/apk/debug/app-debug.apk
           
