@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionListener
@@ -502,7 +503,15 @@ fun MarcusApp() {
                     }
                     TextButton(onClick = { chatMode = false }) { Text("BACK TO VOICE", color = Blue) }
                 }
-                Text("PRIVATE SESSION  •  VOICE PAUSES WHEN APP LEAVES FOREGROUND", color = Muted, fontSize = 8.sp, letterSpacing = 0.7.sp)
+                TextButton(
+                    onClick = {
+                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("SET UP PHONE CONTROL  •  ACCESSIBILITY", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+                Text("VOICE PAUSES WHEN APP LEAVES FOREGROUND", color = Muted, fontSize = 8.sp, letterSpacing = 0.7.sp)
             }
         }
     }
