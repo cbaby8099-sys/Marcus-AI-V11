@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import android.provider.Settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -106,7 +107,7 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
             SettingsChoice("Theme", theme, listOf("Eternal Darkness", "Titanium Cyan", "Neon Blue", "Stealth Graphite", "Arctic Silver", "Crimson Night", "Obsidian Gold", "Abyss Blue", "Toxic Green")) { theme = it }
         }
 
-        SettingsSection("PERMISSION CENTRE  •  V50") {
+        SettingsSection("PERMISSION CENTRE  •  V52") {
             var refreshKey by remember { mutableIntStateOf(0) }
             val micGranted = remember(refreshKey) {
                 androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -136,7 +137,7 @@ fun MarcusSettingsScreen(userId: String, onUserIdChange: (String) -> Unit, onClo
         }
 
         SettingsSection("APP & SECURITY") {
-            Text("Marcus V50 • Android edition", color = Color.White)
+            Text("Marcus V52 • Android edition", color = Color.White)
             Text("Never store API keys, passwords, broker credentials or recovery codes in chat history. Phone-control features require Android permissions and explicit confirmation.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
         }
 
