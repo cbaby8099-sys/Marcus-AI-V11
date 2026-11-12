@@ -43,7 +43,8 @@ class FloatingAssistantService : Service() {
             }
             setOnClickListener {
                 val launch = Intent(this@FloatingAssistantService, MainActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    .putExtra("start_voice", true)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 startActivity(launch)
             }
             setOnLongClickListener { stopSelf(); true }
