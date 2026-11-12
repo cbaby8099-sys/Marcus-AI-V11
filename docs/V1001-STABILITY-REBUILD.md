@@ -17,3 +17,7 @@ This branch contains a stability and interface pass on the V100 codebase.
 - The floating shortcut opens Marcus; it is not a full independent chat overlay.
 - Accessibility actions are limited by Android permissions, app UI semantics and game policies. This app cannot promise human-like autonomous gameplay.
 - App crash diagnosis on the physical device still requires the observed crash message or Android crash log.
+
+## Follow-up integration
+- The floating shortcut now requests the main activity to enter voice mode when opened; Android still prompts for microphone permission if it has not been granted.
+- The in-app receiver processes wake and command broadcasts while the main activity is active.
