@@ -2,6 +2,8 @@ package com.marcusai.app
 
 import android.Manifest
 import android.content.Intent
+import android.provider.Settings
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.speech.RecognizerIntent
@@ -191,7 +193,7 @@ private fun MarcusApp() {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("MARCUS", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                        Text("ROBOTIC CORE  •  V53", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
+                        Text("ROBOTIC CORE  •  V100", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showAppManager = !showAppManager; showSettings = false; showGaming = false; showMemory = false }) { Text("APPS", color = palette.accent, fontSize = 11.sp) }
@@ -224,6 +226,31 @@ private fun MarcusApp() {
                         themeName = context.getSharedPreferences("marcus_config_v15", 0).getString("theme", "Eternal Darkness") ?: "Eternal Darkness"
                         answer = "Marcus configuration loaded."
                     })
+                }
+
+
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        if (Settings.canDrawOverlays(context)) {
+                            context.startService(Intent(context, FloatingAssistantService::class.java))
+                            answer = "Floating Marcus bubble started. Use its close control to stop it."
+                        } else {
+                            context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + context.packageName)))
+                        }
+                    }, modifier = Modifier.weight(1f)) { Text("FLOATING MARCUS") }
+                    OutlinedButton(onClick = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            ContextCompat.startForegroundService(context, Intent(context, VoiceWakeService::class.java))
+                            answer = "Wake listener requested. Android will show its ongoing microphone notification."
+                        } else {
+                            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    }, modifier = Modifier.weight(1f)) { Text("HEY MARCUS: ON") }
+                    OutlinedButton(onClick = {
+                        context.stopService(Intent(context, VoiceWakeService::class.java))
+                        context.stopService(Intent(context, FloatingAssistantService::class.java))
+                        answer = "Marcus background voice and floating bubble stopped."
+                    }) { Text("STOP") }
                 }
 
                 Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
