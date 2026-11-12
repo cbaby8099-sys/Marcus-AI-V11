@@ -89,7 +89,11 @@ private fun MarcusApp() {
 
     var recognizer by remember {
         mutableStateOf(
-            if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
+            runCatching {
+                if (SpeechRecognizer.isRecognitionAvailable(context)) {
+                    SpeechRecognizer.createSpeechRecognizer(context)
+                } else null
+            }.getOrNull()
         )
     }
 
@@ -110,10 +114,20 @@ private fun MarcusApp() {
     }
 
     fun startMarcusListening() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            listening = false
+            answer = "Microphone permission is not granted. Allow it in Android App info > Permissions."
+            return
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+            listening = false
+            answer = "Speech recognition is unavailable. Enable a speech recognition provider in Android settings."
+            return
+        }
         val speech = recognizer
         if (speech == null) {
             listening = false
-            answer = "Speech recognition is unavailable. Install or enable a speech recognition provider in Android settings."
+            answer = "Marcus could not create a speech session. Close and reopen Marcus, then try again."
             return
         }
         try {
@@ -121,14 +135,24 @@ private fun MarcusApp() {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
             }
-            speech.cancel()
+            // Avoid cancelling a previous session immediately before starting another;
+            // that cancel/start race can destabilize some Android speech providers.
             listening = true
             speech.startListening(intent)
+        } catch (e: RuntimeException) {
+            listening = false
+            answer = "Microphone could not start (${e.javaClass.simpleName}). Check Android microphone access and speech services."
+            runCatching { speech.cancel() }
+            runCatching { speech.destroy() }
+            recognizer = null
         } catch (e: Exception) {
             listening = false
-            answer = "Could not start microphone: ${e.message ?: "recognition service error"}"
+            answer = "Microphone error: ${e.message ?: "speech service unavailable"}"
+            runCatching { speech.cancel() }
+            runCatching { speech.destroy() }
+            recognizer = null
         }
     }
 
@@ -154,36 +178,56 @@ private fun MarcusApp() {
     }
 
     DisposableEffect(recognizer) {
-        recognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) { listening = true }
-            override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsdB: Float) {}
-            override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() { listening = false }
-            override fun onError(error: Int) {
+        val activeRecognizer = recognizer
+        if (activeRecognizer != null) {
+            runCatching {
+                activeRecognizer.setRecognitionListener(object : android.speech.RecognitionListener {
+                    override fun onReadyForSpeech(params: Bundle?) { listening = true }
+                    override fun onBeginningOfSpeech() {}
+                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+                    override fun onEndOfSpeech() { listening = false }
+                    override fun onError(error: Int) {
+                        listening = false
+                        answer = when (error) {
+                            SpeechRecognizer.ERROR_AUDIO -> "Microphone audio error. Check that another app is not using the microphone."
+                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is missing. Enable it in Android App info."
+                            SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech provider network error. Check your connection or enable an offline speech pack."
+                            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "I didn't catch that. Tap the microphone and speak again."
+                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Microphone is busy. Wait a moment and try again."
+                            SpeechRecognizer.ERROR_CLIENT -> "Speech session stopped. Tap the microphone to start a fresh session."
+                            else -> "Speech recognition error ($error). Try again."
+                        }
+                        if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) {
+                            runCatching {
+                                recognizer = if (SpeechRecognizer.isRecognitionAvailable(context)) {
+                                    SpeechRecognizer.createSpeechRecognizer(context)
+                                } else null
+                            }.onFailure {
+                                recognizer = null
+                                answer = "Speech service needs to be restarted. Close and reopen Marcus."
+                            }
+                        }
+                    }
+                    override fun onResults(results: Bundle?) {
+                        listening = false
+                        val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                        if (!spoken.isNullOrBlank()) sendMessage(spoken, userId, history, { history = it }, { answer = it }, { busy = it }, scope, tts, context)
+                    }
+                    override fun onPartialResults(partialResults: Bundle?) {}
+                    override fun onEvent(eventType: Int, params: Bundle?) {}
+                })
+            }.onFailure {
                 listening = false
-                answer = when (error) {
-                    SpeechRecognizer.ERROR_AUDIO -> "Microphone audio error. Check that another app is not using the microphone."
-                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is missing. Enable it in Android App info."
-                    SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech provider network error. Check your connection or enable an offline speech pack."
-                    SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "I didn't catch that. Tap the microphone and speak again."
-                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Microphone is busy. Wait a moment and try again."
-                    SpeechRecognizer.ERROR_CLIENT -> "Speech session stopped. Tap the microphone to start a fresh session."
-                    else -> "Speech recognition error ($error). Try again."
-                }
-                if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) {
-                    recognizer = if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
-                }
+                answer = "Android speech service could not attach to Marcus. Close and reopen the app."
             }
-            override fun onResults(results: Bundle?) {
-                listening = false
-                val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                if (!spoken.isNullOrBlank()) sendMessage(spoken, userId, history, { history = it }, { answer = it }, { busy = it }, scope, tts, context)
+        }
+        onDispose {
+            if (activeRecognizer != null) {
+                runCatching { activeRecognizer.cancel() }
+                runCatching { activeRecognizer.destroy() }
             }
-            override fun onPartialResults(partialResults: Bundle?) {}
-            override fun onEvent(eventType: Int, params: Bundle?) {}
-        })
-        onDispose { recognizer?.cancel(); recognizer?.destroy() }
+        }
     }
 
     val currentUserId by rememberUpdatedState(userId)
