@@ -10,6 +10,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -26,6 +28,9 @@ class VoiceWakeService : Service() {
     private var recognizer: SpeechRecognizer? = null
     private var awaitingCommand = false
     private var restarting = false
+    private var stopping = false
+    private val handler = Handler(Looper.getMainLooper())
+    private val restartTask = Runnable { startRecognition() }
 
     override fun onCreate() {
         super.onCreate()
@@ -41,13 +46,18 @@ class VoiceWakeService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        stopping = false
         startForeground(NOTIFICATION_ID, notification())
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         startRecognition()
         return START_STICKY
     }
 
     private fun startRecognition() {
-        if (restarting || !SpeechRecognizer.isRecognitionAvailable(this)) return
+        if (stopping || restarting || !SpeechRecognizer.isRecognitionAvailable(this)) return
         restarting = true
         try {
             recognizer?.destroy()
@@ -60,7 +70,7 @@ class VoiceWakeService : Service() {
                 override fun onEndOfSpeech() {}
                 override fun onError(error: Int) {
                     restarting = false
-                    if (error != SpeechRecognizer.ERROR_CLIENT) restartSoon()
+                    if (!stopping) restartSoon(if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 2200L else 1400L)
                 }
                 override fun onResults(results: android.os.Bundle?) {
                     restarting = false
@@ -92,8 +102,10 @@ class VoiceWakeService : Service() {
         }
     }
 
-    private fun restartSoon() {
-        android.os.Handler(mainLooper).postDelayed({ startRecognition() }, 900L)
+    private fun restartSoon(delayMs: Long = 1400L) {
+        if (stopping) return
+        handler.removeCallbacks(restartTask)
+        handler.postDelayed(restartTask, delayMs)
     }
 
     private fun createChannel() {
@@ -120,6 +132,8 @@ class VoiceWakeService : Service() {
     }
 
     override fun onDestroy() {
+        stopping = true
+        handler.removeCallbacksAndMessages(null)
         recognizer?.cancel()
         recognizer?.destroy()
         recognizer = null
