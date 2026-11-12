@@ -77,6 +77,8 @@ private fun MarcusApp() {
     var themeName by remember { mutableStateOf(context.getSharedPreferences("marcus_config_v15", 0).getString("theme", "Eternal Darkness") ?: "Eternal Darkness") }
     val palette = remember(themeName) { MarcusThemePalette.from(themeName) }
     var showAppManager by remember { mutableStateOf(false) }
+    var showGaming by remember { mutableStateOf(false) }
+    var showMemory by remember { mutableStateOf(false) }
     var chatMode by remember { mutableStateOf(true) }
     var history by remember { mutableStateOf(listOf<String>()) }
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
@@ -139,13 +141,6 @@ private fun MarcusApp() {
         if (granted) startMarcusListening() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
     }
 
-    LaunchedEffect(startVoice) {
-        if (startVoice) {
-            chatMode = false
-            android.os.Handler(context.mainLooper).postDelayed({ requestMarcusMic() }, 450L)
-        }
-    }
-
     DisposableEffect(recognizer) {
         recognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) { listening = true }
@@ -196,12 +191,24 @@ private fun MarcusApp() {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("MARCUS", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                        Text("ROBOTIC CORE  •  V50", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
+                        Text("ROBOTIC CORE  •  V52", color = palette.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { showAppManager = !showAppManager; showSettings = false }) { Text("APPS", color = palette.accent, fontSize = 12.sp) }
-                        TextButton(onClick = { showSettings = !showSettings; showAppManager = false }) { Text("⚙", color = palette.accent, fontSize = 22.sp) }
+                        TextButton(onClick = { showAppManager = !showAppManager; showSettings = false; showGaming = false; showMemory = false }) { Text("APPS", color = palette.accent, fontSize = 11.sp) }
+                        TextButton(onClick = { showGaming = !showGaming; showSettings = false; showAppManager = false; showMemory = false }) { Text("GAMES", color = palette.accent, fontSize = 11.sp) }
+                        TextButton(onClick = { showMemory = !showMemory; showSettings = false; showAppManager = false; showGaming = false }) { Text("MEMORY", color = palette.accent, fontSize = 10.sp) }
+                        TextButton(onClick = { showSettings = !showSettings; showAppManager = false; showGaming = false; showMemory = false }) { Text("⚙", color = palette.accent, fontSize = 22.sp) }
                     }
+                }
+
+                if (showGaming) {
+                    MarcusGamingScreen(palette = palette, onClose = { showGaming = false }, onAskMarcus = { prompt ->
+                        sendMessage(prompt, userId, history, { history = it }, { answer = it }, { busy = it }, scope, tts, context)
+                    })
+                }
+
+                if (showMemory) {
+                    MarcusMemoryScreen(palette = palette, onClose = { showMemory = false })
                 }
 
                 if (showAppManager) {
