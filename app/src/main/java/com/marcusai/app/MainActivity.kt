@@ -82,9 +82,6 @@ fun MarcusApp() {
     }
     LaunchedEffect(userId) { prefs.edit().putString("userId", userId).apply() }
 
-    var idInput by remember { mutableStateOf("") }
-    var showIdDialog by remember { mutableStateOf(false) }
-    var idError by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var reply by remember { mutableStateOf("Marcus is online. Start a conversation whenever you're ready.") }
     var busy by remember { mutableStateOf(false) }
@@ -342,12 +339,7 @@ fun MarcusApp() {
                         Text("MARCUS", color = White, fontSize = 25.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
                         Text("PERSONAL AI  •  V1000", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
                     }
-                    TextButton(onClick = {
-                        idInput = ""
-                        showIdDialog = true
-                    }) {
-                        Text("ACCOUNT", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
+                    RobotAvatar(modifier = Modifier.size(58.dp))
                 }
 
                 Spacer(Modifier.height(18.dp))
@@ -514,46 +506,49 @@ fun MarcusApp() {
             }
         }
 
-        if (showIdDialog) {
-            AlertDialog(
-                onDismissRequest = { showIdDialog = false },
-                title = { Text("LINK EXISTING ACCOUNT", color = White) },
-                text = {
-                    Column {
-                        Text(
-                            "Optional: paste your previous Marcus V10 account ID to reconnect its saved cloud memory. You do not need a government ID.",
-                            color = Muted
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        OutlinedTextField(
-                            value = idInput,
-                            onValueChange = { idInput = it.trim(); idError = false },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            label = { Text("Previous Marcus account ID") },
-                            isError = idError
-                        )
-                        if (idError) Text("That account ID format is not valid.", color = Color.Red, fontSize = 12.sp)
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        val cleanId = idInput.trim()
-                        if (cleanId.matches(Regex("^[a-zA-Z0-9_-]{16,80}$"))) {
-                            userId = cleanId
-                            prefs.edit().putString("userId", cleanId).apply()
-                            showIdDialog = false
-                            idError = false
-                            reply = "Previous Marcus account linked."
-                        } else {
-                            idError = true
-                        }
-                    }) { Text("LINK ACCOUNT", color = Blue) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showIdDialog = false }) { Text("CANCEL", color = Muted) }
-                },
-                containerColor = Panel
+}
+
+@Composable
+private fun RobotAvatar(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .background(
+                Brush.linearGradient(listOf(Color(0xFF8EDBFF), Color(0xFF647DCE), Color(0xFF272F55))),
+                RoundedCornerShape(22.dp)
+            )
+            .padding(3.dp)
+            .background(Color(0xFF111A2B), RoundedCornerShape(20.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier
+                    .width(35.dp)
+                    .height(3.dp)
+                    .background(Blue, RoundedCornerShape(4.dp))
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier
+                    .width(44.dp)
+                    .height(31.dp)
+                    .background(
+                        Brush.verticalGradient(listOf(Color(0xFFDAE9F5), Color(0xFF758DAA))),
+                        RoundedCornerShape(11.dp)
+                    )
+                    .padding(horizontal = 7.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.size(7.dp).background(Color(0xFF10233C), CircleShape))
+                Box(Modifier.size(7.dp).background(Color(0xFF10233C), CircleShape))
+            }
+            Spacer(Modifier.height(3.dp))
+            Box(
+                Modifier
+                    .width(17.dp)
+                    .height(3.dp)
+                    .background(Violet, RoundedCornerShape(4.dp))
             )
         }
     }
